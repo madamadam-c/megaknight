@@ -8,7 +8,10 @@ use std::{
     time::Duration,
 };
 
-use cozy_chess::{util::parse_uci_move, Board};
+use cozy_chess::{
+    util::{display_uci_move, parse_uci_move},
+    Board, Move,
+};
 
 use crate::engine::{Engine, SearchInfo, SearchLimits, SearchRequest, SearchResult};
 
@@ -25,8 +28,16 @@ enum Command {
 }
 
 enum WorkerOutput {
-    Info { id: u64, info: SearchInfo },
-    BestMove { id: u64, result: SearchResult },
+    Info {
+        id: u64,
+        board: Board,
+        info: SearchInfo,
+    },
+    BestMove {
+        id: u64,
+        board: Board,
+        result: SearchResult,
+    },
 }
 
 fn parse_position(line: &str, board: &mut Board) {
@@ -123,18 +134,26 @@ fn print_output(output: &str) {
     io::stdout().flush().unwrap();
 }
 
-fn print_info(id: u64, active_id: Option<u64>, info: SearchInfo) {
+fn format_uci_move(board: &Board, chess_move: Move) -> String {
+    display_uci_move(board, chess_move).to_string()
+}
+
+fn print_info(id: u64, active_id: Option<u64>, board: &Board, info: SearchInfo) {
     if active_id != Some(id) {
         return;
     }
 
     let elapsed_ms = info.elapsed.as_millis() as u64;
-    let nps = info.nodes.saturating_mul(1000).checked_div(elapsed_ms).unwrap_or(0);
-    
+    let nps = info
+        .nodes
+        .saturating_mul(1000)
+        .checked_div(elapsed_ms)
+        .unwrap_or(0);
+
     let pv = info
         .pv
         .iter()
-        .map(ToString::to_string)
+        .map(|&chess_move| format_uci_move(board, chess_move))
         .collect::<Vec<_>>()
         .join(" ");
 
@@ -147,11 +166,12 @@ fn print_info(id: u64, active_id: Option<u64>, info: SearchInfo) {
 fn print_best_move(
     id: u64,
     active_search: &mut Option<(u64, Arc<AtomicBool>)>,
+    board: &Board,
     result: SearchResult,
 ) {
     let best_move = result
         .best_move
-        .map(|chess_move| chess_move.to_string())
+        .map(|chess_move| format_uci_move(board, chess_move))
         .unwrap_or_else(|| "0000".to_string());
     print_output(&format!("bestmove {best_move}"));
 
@@ -188,10 +208,19 @@ fn main() {
             match command {
                 Command::Go { id, request } => {
                     let output_tx_for_info = &output_tx;
+                    let search_board = request.board.clone();
                     let result = engine.search(&request, |info| {
-                        let _ = output_tx_for_info.send(WorkerOutput::Info { id, info });
+                        let _ = output_tx_for_info.send(WorkerOutput::Info {
+                            id,
+                            board: search_board.clone(),
+                            info,
+                        });
                     });
-                    let _ = output_tx.send(WorkerOutput::BestMove { id, result });
+                    let _ = output_tx.send(WorkerOutput::BestMove {
+                        id,
+                        board: search_board,
+                        result,
+                    });
                 }
                 Command::NewGame => engine.new_game(),
                 Command::Quit => break,
@@ -207,11 +236,11 @@ fn main() {
     while !quitting {
         while let Ok(output) = output_rx.try_recv() {
             match output {
-                WorkerOutput::Info { id, info } => {
-                    print_info(id, active_search.as_ref().map(|(id, _)| *id), info);
+                WorkerOutput::Info { id, board, info } => {
+                    print_info(id, active_search.as_ref().map(|(id, _)| *id), &board, info);
                 }
-                WorkerOutput::BestMove { id, result } => {
-                    print_best_move(id, &mut active_search, result);
+                WorkerOutput::BestMove { id, board, result } => {
+                    print_best_move(id, &mut active_search, &board, result);
                 }
             }
         }

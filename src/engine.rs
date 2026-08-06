@@ -1,5 +1,5 @@
 use std::{
-    cmp::max,
+    ops::Neg,
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc,
@@ -52,6 +52,12 @@ struct SearchContext {
     nodes: u64,
 }
 
+#[derive(Clone, Copy)]
+struct SearchBounds {
+    alpha: i32,
+    beta: i32,
+}
+
 impl SearchContext {
     fn new(board: &Board, limits: SearchLimits, stop: Arc<AtomicBool>) -> Self {
         let start = Instant::now();
@@ -94,6 +100,17 @@ impl SearchContext {
 
     fn elapsed(&self) -> Duration {
         self.start.elapsed()
+    }
+}
+
+impl Neg for SearchBounds {
+    type Output = Self;
+
+    fn neg(self) -> Self::Output {
+        SearchBounds {
+            alpha: -self.beta,
+            beta: -self.alpha,
+        }
     }
 }
 
@@ -143,7 +160,13 @@ impl Engine {
 
     pub fn new_game(&mut self) {}
 
-    fn minimax(&mut self, board: &Board, depth: i32, context: &mut SearchContext) -> Option<i32> {
+    fn minimax(
+        &mut self,
+        board: &Board,
+        depth: i32,
+        mut bounds: SearchBounds,
+        context: &mut SearchContext,
+    ) -> Option<i32> {
         if context.should_stop() {
             return None;
         }
@@ -162,7 +185,19 @@ impl Engine {
         for chess_move in moves {
             let mut next_board = board.clone();
             next_board.play(chess_move);
-            result = max(result, -self.minimax(&next_board, depth - 1, context)?);
+
+            let x = -self.minimax(&next_board, depth - 1, -bounds, context)?;
+
+            if x > result {
+                result = x;
+                if x > bounds.alpha {
+                    bounds.alpha = x;
+                }
+            }
+
+            if x >= bounds.beta {
+                break;
+            }
         }
 
         Some(result)
@@ -177,6 +212,10 @@ impl Engine {
     ) -> Option<(Move, i32)> {
         let mut best_move = None;
         let mut best_score = -1_000_000_000;
+        let mut bounds = SearchBounds {
+            alpha: -1_000_000_000,
+            beta: 1_000_000_000,
+        };
 
         for &chess_move in root_moves {
             if context.should_stop() {
@@ -186,10 +225,17 @@ impl Engine {
             let mut next_board = board.clone();
             next_board.play(chess_move);
 
-            let score = -self.minimax(&next_board, depth - 1, context)?;
+            let score = -self.minimax(&next_board, depth - 1, -bounds, context)?;
             if score > best_score {
                 best_score = score;
+                if score > bounds.alpha {
+                    bounds.alpha = score;
+                }
                 best_move = Some(chess_move);
+            }
+
+            if score >= bounds.beta {
+                break;
             }
         }
 
