@@ -1,6 +1,6 @@
-use cozy_chess::{util::parse_uci_move, Board, Color};
+use cozy_chess::{Board, Color, util::parse_uci_move};
 
-use crate::{format_uci_move, parse_go, parse_position};
+use crate::{format_uci_move, parse_go, parse_hash_option, parse_position};
 
 #[test]
 fn parse_go_collects_multiple_limits() {
@@ -49,4 +49,11 @@ fn format_uci_move_uses_standard_castling_notation() {
     assert_eq!(format_uci_move(&white_board, white_long), "e1c1");
     assert_eq!(format_uci_move(&black_board, black_short), "e8g8");
     assert_eq!(format_uci_move(&black_board, black_long), "e8c8");
+}
+
+#[test]
+fn parse_hash_option_reads_megabytes() {
+    assert_eq!(parse_hash_option("setoption name Hash value 64"), Some(64));
+    assert_eq!(parse_hash_option("setoption name Hash value 0"), Some(1));
+    assert_eq!(parse_hash_option("setoption name Threads value 4"), None);
 }

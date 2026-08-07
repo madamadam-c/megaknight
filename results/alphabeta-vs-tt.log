@@ -1,0 +1,380 @@
+[INFO  ] [13:04:38.077203] <                    > fastchess --- fastchess alpha 1.8.2 20260729-74deac2
+[INFO  ] [13:04:38.077315] <                    > fastchess --- Setting seed to: 123456
+[INFO  ] [13:04:38.150360] <                    > fastchess --- Indexing opening suite...
+
+[INFO  ] [13:04:38.198764] <                    > fastchess --- Starting tournament...
+[WARN  ] [13:05:05.527244] <                    > fastchess --- Warning; Illegal PV move - move e1a1 from alphabeta
+Info; info depth 4 score cp -1100 nodes 171204 time 14 nps 12228857 pv e1a1
+Position; fen rnbqkb1r/ppp2ppp/5n2/3pp3/2P5/1Q2P3/PP1P1PPP/RNB1KBNR w KQkq - 0 1
+Moves; c4d5 d8d5 f1b5 c7c6 b5c4 d5g2 c4f7 e8e7 f7d5 f6d5 b1c3 d5c3 b2c3 g2h1 c1a3 e7f6
+
+[WARN  ] [13:05:05.527336] <                    > fastchess --- Warning; Illegal PV move - move e1a1 from alphabeta
+Info; info depth 5 score cp -800 nodes 1480319 time 169 nps 8759284 pv e1a1
+Position; fen rnbqkb1r/ppp2ppp/5n2/3pp3/2P5/1Q2P3/PP1P1PPP/RNB1KBNR w KQkq - 0 1
+Moves; c4d5 d8d5 f1b5 c7c6 b5c4 d5g2 c4f7 e8e7 f7d5 f6d5 b1c3 d5c3 b2c3 g2h1 c1a3 e7f6
+
+[WARN  ] [13:05:05.527356] <                    > fastchess --- Warning; Illegal move e1a1 played by alphabeta
+
+[WARN  ] [13:05:52.733482] <                    > fastchess --- Warning; Illegal PV move - move e1h1 from alphabeta
+Info; info depth 3 score cp -100 nodes 2784 time 0 nps 0 pv e1h1
+Position; fen r1bqkb1r/pp3ppp/2n1pn2/1Bpp4/P2P4/2P1PN2/1P3PPP/RNBQK2R b KQkq - 0 1
+Moves; c5c4 b2b3 a7a6 b5c6 b7c6 g2g3 c4b3 d1b3 a6a5 h2h3 g7g6 c3c4 d5c4 b3a2 c4c3 g3g4 c6c5 a2c4 c3c2 b1d2 c8b7 e3e4 c5d4 f3d4 f6e4 c4b5 d8d7 b5d7 e8d7 d2e4 b7e4
+
+[WARN  ] [13:05:58.605983] <                    > fastchess --- Warning; Illegal PV move - move e8h8 from alphabeta
+Info; info depth 4 score cp -1200 nodes 23775 time 7 nps 3396428 pv e8h8
+Position; fen r1bqkb1r/pp2pppp/2n2n2/2pp4/5P2/3PPNP1/PPP4P/RNBQKB1R b KQkq - 0 1
+Moves; d5d4 e3d4 c5c4 d3c4 c8g4 a2a3 a7a6 b2b3 e7e6 h2h3 g4f3 d1f3 c6d4 f3d1 d4f5 h1g1 a6a5 c2c3 b7b6 a3a4 g7g6 b3b4 a5b4 g3g4 d8d1 e1d1 f5h4 c3b4 f8b4 g4g5 h4f3 g1g3 f3h2 g5f6 h2f1 g3f3 f1d2 b1d2 h7h5 d2b1 b4a5 f3b3 h5h4 b1a3 b6b5 a4b5 a5b6 a3c2 b6a7 c1d2 e6e5 f4e5 g6g5 c4c5 g5g4 b5b6 a8d8 b6a7
+
+[WARN  ] [13:05:58.606057] <                    > fastchess --- Warning; Illegal PV move - move e8h8 from alphabeta
+Info; info depth 6 score cp -1100 nodes 805390 time 107 nps 7527009 pv e8h8
+Position; fen r1bqkb1r/pp2pppp/2n2n2/2pp4/5P2/3PPNP1/PPP4P/RNBQKB1R b KQkq - 0 1
+Moves; d5d4 e3d4 c5c4 d3c4 c8g4 a2a3 a7a6 b2b3 e7e6 h2h3 g4f3 d1f3 c6d4 f3d1 d4f5 h1g1 a6a5 c2c3 b7b6 a3a4 g7g6 b3b4 a5b4 g3g4 d8d1 e1d1 f5h4 c3b4 f8b4 g4g5 h4f3 g1g3 f3h2 g5f6 h2f1 g3f3 f1d2 b1d2 h7h5 d2b1 b4a5 f3b3 h5h4 b1a3 b6b5 a4b5 a5b6 a3c2 b6a7 c1d2 e6e5 f4e5 g6g5 c4c5 g5g4 b5b6 a8d8 b6a7
+
+[WARN  ] [13:05:58.606072] <                    > fastchess --- Warning; Illegal move e8h8 played by alphabeta
+
+[WARN  ] [13:06:03.588357] <                    > fastchess --- Warning; Illegal PV move - move e1h1 from alphabeta
+Info; info depth 5 score cp 300 nodes 1480605 time 192 nps 7711484 pv e1h1
+Position; fen r1bqk1nr/pp1pppbp/2n3p1/2p5/8/3P1NP1/PPPNPPBP/R1BQK2R b KQkq - 0 1
+Moves; a7a5 a2a3 a5a4 c2c3 b7b5 e2e3 d7d5 h2h3 e7e5 d3d4 c5c4 b2b4 a4b3 g3g4 b3b2 c1b2 b5b4 a3b4 a8a1 b2a1 c8d7 d4e5 d8a8 e3e4 c6e5 e4d5 g6g5 d5d6 f7f5 g4f5 h7h5 d2c4 e5c4
+
+[WARN  ] [13:06:03.588559] <                    > fastchess --- Warning; Illegal move e1h1 played by alphabeta
+
+[WARN  ] [13:06:24.379347] <                    > fastchess --- Warning; Illegal PV move - move e8h8 from alphabeta
+Info; info depth 5 score cp -400 nodes 1886685 time 200 nps 9433425 pv e8h8
+Position; fen r1bqk2r/1ppp1ppp/p1n2n2/4p3/1bP1P3/2NP1N2/PP2BPPP/R1BQK2R b KQkq - 0 1
+Moves; b7b5 a2a3 b4c3 b2c3 b5c4 d3c4 f6e4 g2g3 a6a5 d1d3 e4f2 e1f2 d7d5 c4d5 c6d4 c3d4 c7c6 d4e5 c8g4 d5c6 a5a4 d3e4 d8b6 c1e3 g4f3 e2f3 b6b2 f3e2
+
+[WARN  ] [13:06:24.379421] <                    > fastchess --- Warning; Illegal move e8h8 played by alphabeta
+
+[WARN  ] [13:07:31.056783] <                    > fastchess --- Warning; Illegal PV move - move e1h1 from alphabeta
+Info; info depth 5 score cp -1100 nodes 1085585 time 165 nps 6579303 pv e1h1
+Position; fen r1bqkbnr/ppp1pp1p/2np2p1/8/8/3P1NP1/PPP1PP1P/RNBQKB1R w KQkq - 0 1
+Moves; f3h4 d6d5 a2a3 f8g7 c2c3 d5d4 b2b4 d4c3 d1c2 a7a5 b4a5 e7e6 e2e3 g6g5 h4g2 a8a5 d3d4 e6e5 f2f3 e5d4 h2h3 d4e3 g2e3 c6d4 c2d1 c3c2 e3c2 d4c2 d1c2 g7a1 a3a4 c8f5 f1b5 a5b5 c2a2 b5b1
+
+[WARN  ] [13:07:31.056959] <                    > fastchess --- Warning; Illegal move e1h1 played by alphabeta
+
+[WARN  ] [13:07:35.281086] <                    > fastchess --- Warning; Illegal PV move - move e1a1 from alphabeta
+Info; info depth 3 score cp 500 nodes 7587 time 1 nps 7587000 pv e1a1
+Position; fen rnbqk2r/pppp1ppp/5n2/8/1b1P4/2N5/PPP2PPP/R1BQKBNR w KQkq - 0 1
+Moves; a2a3 b4c3 b2c3 b8c6 c1g5 h7h6 g5f4 a7a5 f2f3 f6d5 g1e2 b7b6 g2g3 a5a4 c3c4 d5f4 e2f4 b6b5 c4b5 g7g5 b5c6 g5f4 c6d7 c8d7 d1e2 d7e6 g3f4 c7c6
+
+[WARN  ] [13:07:35.281275] <                    > fastchess --- Warning; Illegal PV move - move e1a1 from alphabeta
+Info; info depth 5 score cp 500 nodes 1044944 time 123 nps 8495479 pv e1a1
+Position; fen rnbqk2r/pppp1ppp/5n2/8/1b1P4/2N5/PPP2PPP/R1BQKBNR w KQkq - 0 1
+Moves; a2a3 b4c3 b2c3 b8c6 c1g5 h7h6 g5f4 a7a5 f2f3 f6d5 g1e2 b7b6 g2g3 a5a4 c3c4 d5f4 e2f4 b6b5 c4b5 g7g5 b5c6 g5f4 c6d7 c8d7 d1e2 d7e6 g3f4 c7c6
+
+[WARN  ] [13:07:35.281324] <                    > fastchess --- Warning; Illegal move e1a1 played by alphabeta
+
+[WARN  ] [13:07:47.133442] <                    > fastchess --- Warning; Illegal PV move - move e8a8 from alphabeta
+Info; info depth 5 score cp 100 nodes 56177 time 12 nps 4681416 pv e8a8
+Position; fen r1bqkbnr/pp1p1p1p/2n1p1p1/2p5/4P3/2PP1N2/PP3PPP/RNBQKB1R w KQkq - 0 1
+Moves; a2a3 e6e5 b2b3 a7a5 g2g3 b7b5 h2h3 a5a4 b3a4 b5a4 c3c4 d7d6 g3g4 f7f6 g4g5 f6f5 e4f5 g6f5 h3h4 f5f4 f3d2 d6d5 c4d5 c6d4 d5d6 f8d6 d2c4 f4f3 b1d2 d6c7 h4h5 h7h6 g5g6 g8f6 c1b2 d4e2 g6g7 h8h7 d2f3 e2d4 g7g8n d4b3 g8f6 d8f6 a1b1 c8g4 c4e5 g4f3 e5f3 c7a5 e1e2 h7e7 f3e5 e7e5 b2e5 f6e5 e2f3 b3d2 f3g2 e5d5 f2f3 d2b1 d1b1 a5d2 d3d4 c5d4 b1e4 d5e4 f3e4 d2c3 f1e2 c3b2 h1h3
+
+[WARN  ] [13:07:49.921910] <                    > fastchess --- Warning; Illegal PV move - move e8a8 from alphabeta
+Info; info depth 5 score cp 600 nodes 1449554 time 169 nps 8577242 pv e8a8
+Position; fen r1bqkb1r/pppp1ppp/2n2n2/4p3/8/2NPP3/PPP2PPP/R1BQKBNR w KQkq - 0 1
+Moves; a2a3 a7a5 b2b3 b7b6 f2f3 d7d6 g2g3 d6d5 h2h3 d5d4 e3d4 e5d4 c3b1 b6b5 c2c3 d4c3 a3a4 b5a4 b3a4 f8b4 d1e2 c8e6 f3f4 c3c2 b1d2 d8d4 f1g2
+
+[WARN  ] [13:07:49.922039] <                    > fastchess --- Warning; Illegal move e8a8 played by alphabeta
+
+[WARN  ] [13:08:43.440156] <                    > fastchess --- Warning; Illegal PV move - move e1a1 from alphabeta
+Info; info depth 5 score cp 100 nodes 110569 time 17 nps 6504058 pv e1a1
+Position; fen r1b1kbnr/1pqp1ppp/p1n1p3/2p5/2P1P3/P2P1N2/1P3PPP/RNBQKB1R w KQkq - 0 1
+Moves; b2b3 b7b5 g2g3 b5c4 b3c4 e6e5 h2h3 a6a5 a3a4 d7d6 g3g4 f7f5 g4f5 d6d5 c4d5 c6d4 f3g1 c5c4 d3c4 g7g6 f5g6 h7g6 c1a3 g6g5 f2f3 d4f5 e4f5 g8f6 h3h4 h8h4 d5d6 c7c6 d6d7 f6d7 h1h4 g5h4 c4c5 f8c5 f1b5 c6b6 g1e2 h4h3 d1d5 c5a3 b5d7 c8d7 d5a8 e8f7 b1a3 h3h2 a8d5 f7f6 d5e5 f6e5 a3c4 e5f6
+
+[WARN  ] [13:10:07.329494] <                    > fastchess --- Warning; Illegal PV move - move e8h8 from alphabeta
+Info; info depth 4 score cp -500 nodes 13899 time 1 nps 13899000 pv e8h8
+Position; fen rnbqkbnr/pp4pp/5p2/2p1p3/3pPP2/3P4/PPP1N1PP/R1BQKBNR w KQkq - 0 1
+Moves; a2a3 c8g4 h2h3 g4e2 g1e2 c5c4 d3c4 d4d3 c2d3 e5f4 e2f4 g7g5 f4e6 d8a5 c1d2 a5e5 d1b3 e5e6 b3b7 e6c6 b7b5 g5g4 h3g4 a7a5 b2b3 a5a4 b3a4 h7h6 g2g3 g8e7 d2b4 f6f5 e4f5 e7f5 g4f5 f8b4 a3b4 c6b5 c4b5
+
+[WARN  ] [13:10:11.525294] <                    > fastchess --- Warning; Illegal PV move - move e8h8 from alphabeta
+Info; info depth 4 score cp -800 nodes 16237 time 2 nps 8118500 pv e8h8
+Position; fen rnbqkbnr/pp4pp/5p2/2p1p3/3pPP2/3P4/PPP1N1PP/R1BQKBNR w KQkq - 0 1
+Moves; a2a3 c8g4 h2h3 g4e2 g1e2 c5c4 d3c4 d4d3 c2d3 e5f4 e2f4 g7g5 f4e6 d8a5 c1d2 a5e5 d1b3 e5e6 b3b7 e6c6 b7b5 g5g4 h3g4 a7a5 b2b3 a5a4 b3a4 h7h6 g2g3 g8e7 d2b4 f6f5 e4f5 e7f5 g4f5 f8b4 a3b4 c6b5 c4b5 h6h5 d3d4 h5h4 g3g4 h4h3 a4a5 h3h2 d4d5 b8d7 a5a6 d7e5 b5b6 e5f3 e1d1 f3d4 a1a2 d4f5 b6b7 f5e3 d1e2 a8d8 e2e3
+
+[WARN  ] [13:10:11.525409] <                    > fastchess --- Warning; Illegal PV move - move e8h8 from alphabeta
+Info; info depth 6 score cp -800 nodes 952712 time 122 nps 7809114 pv e8h8
+Position; fen rnbqkbnr/pp4pp/5p2/2p1p3/3pPP2/3P4/PPP1N1PP/R1BQKBNR w KQkq - 0 1
+Moves; a2a3 c8g4 h2h3 g4e2 g1e2 c5c4 d3c4 d4d3 c2d3 e5f4 e2f4 g7g5 f4e6 d8a5 c1d2 a5e5 d1b3 e5e6 b3b7 e6c6 b7b5 g5g4 h3g4 a7a5 b2b3 a5a4 b3a4 h7h6 g2g3 g8e7 d2b4 f6f5 e4f5 e7f5 g4f5 f8b4 a3b4 c6b5 c4b5 h6h5 d3d4 h5h4 g3g4 h4h3 a4a5 h3h2 d4d5 b8d7 a5a6 d7e5 b5b6 e5f3 e1d1 f3d4 a1a2 d4f5 b6b7 f5e3 d1e2 a8d8 e2e3
+
+[WARN  ] [13:10:11.525483] <                    > fastchess --- Warning; Illegal move e8h8 played by alphabeta
+
+[WARN  ] [13:10:19.760039] <                    > fastchess --- Warning; Illegal PV move - move e8h8 from alphabeta
+Info; info depth 5 score cp -400 nodes 1534912 time 197 nps 7791431 pv e8h8
+Position; fen rnbqk2r/ppp1bppp/5n2/3p4/3P4/2N1P1P1/PP3P1P/R1BQKBNR b KQkq - 0 1
+Moves; d8d6 a2a3 a7a5 b2b3 a5a4 b3a4 b7b6 f2f3 c7c6 e3e4 d5e4 f3e4 c6c5 e4e5 d6e6 d1f3 c5d4 f3a8 e6e5 c3e4 d4d3 f1d3 f6e4 g1e2 e7b4 a3b4 e5a1 a8b8
+
+[WARN  ] [13:10:19.760402] <                    > fastchess --- Warning; Illegal move e8h8 played by alphabeta
+
+[WARN  ] [13:10:28.759411] <                    > fastchess --- Warning; Illegal PV move - move e8h8 from alphabeta
+Info; info depth 5 score cp 100 nodes 190649 time 54 nps 3530537 pv e8h8
+Position; fen rnb1k2r/ppp1ppbp/8/8/8/8/PPPB1PPP/R3KBNR w KQkq - 0 1
+Moves; d2c3 e7e5 a2a3 a7a5 b2b3
+
+[WARN  ] [13:10:50.803328] <                    > fastchess --- Warning; Illegal PV move - move e8a8 from alphabeta
+Info; info depth 3 score cp -100 nodes 15312 time 1 nps 15312000 pv e8a8
+Position; fen rnbqkb1r/1ppppp1p/5np1/pP6/P7/5N2/2PPPPPP/RNBQKB1R b KQkq - 0 1
+Moves; g6g5 f3g5 b7b6 c1b2 d7d5 e2e3 d5d4 b2d4 c7c5 b5c6 h7h6 c6c7 d8c7 g5f3 h6h5 c2c3 h5h4 g2g3 h4g3 f2g3 b8a6 e3e4 a6c5 e4e5 f6e4 g3g4 e4g3 e5e6 f7e6 h1g1 g3f1 d4h8 f1h2 f3d4 e6e5 g4g5 c5d3 e1e2 e5d4 e2d3 c8f5 d3e2 d4c3 d2c3 e7e6 d1c1 f5e4 b1d2 e4d5 c3c4 d5c6 c1b1
+
+[WARN  ] [13:10:51.171571] <                    > fastchess --- Warning; Illegal PV move - move e8a8 from alphabeta
+Info; info depth 3 score cp -100 nodes 17956 time 2 nps 8978000 pv e8a8
+Position; fen rnbqkb1r/1ppppp1p/5np1/pP6/P7/5N2/2PPPPPP/RNBQKB1R b KQkq - 0 1
+Moves; g6g5 f3g5 b7b6 c1b2 d7d5 e2e3 d5d4 b2d4 c7c5 b5c6 h7h6 c6c7 d8c7 g5f3 h6h5 c2c3 h5h4 g2g3 h4g3 f2g3 b8a6 e3e4 a6c5 e4e5 f6e4 g3g4 e4g3 e5e6 f7e6 h1g1 g3f1 d4h8 f1h2 f3d4 e6e5 g4g5 c5d3 e1e2 e5d4 e2d3 c8f5 d3e2 d4c3 d2c3 e7e6 d1c1 f5e4 b1d2 e4d5 c3c4 d5c6 c1b1 c6b7 h8c3
+
+[WARN  ] [13:11:13.594438] <                    > fastchess --- Warning; Illegal PV move - move e8h8 from alphabeta
+Info; info depth 5 score cp -800 nodes 164039 time 43 nps 3814860 pv e8h8
+Position; fen r1bqkb1r/1p3ppp/p1nppn2/2p5/4PP2/3P1N1P/PPP1B1P1/RNBQ1RK1 b kq - 0 1
+Moves; a6a5 a2a3 a5a4 b2b3 a4b3 c2b3 c5c4 b3c4 d6d5 c4d5 e6d5 e4e5 c6e5 f4e5 b7b6 e5f6 d8f6 d3d4 c8h3 g2h3 f8c5 c1g5 c5d4 d1d4 f6d4 f3d4
+
+[WARN  ] [13:11:59.245393] <                    > fastchess --- Warning; Illegal PV move - move e1a1 from alphabeta
+Info; info depth 5 score cp 200 nodes 83299 time 12 nps 6941583 pv e1a1
+Position; fen rnbqkb1r/pp2pppp/2pp1n2/8/3P1B2/2P2N2/PP2PPPP/RN1QKB1R b KQkq - 0 1
+Moves; d6d5 a2a3 a7a5 b2b3 b7b5 e2e3 e7e6 g2g3 g7g6 h2h3 h7h5 a3a4 b5b4 c3c4 d5c4 b3c4 f6d7 e3e4 f7f6 h3h4 f6f5 e4f5 g6f5 c4c5 f8h6 f3g1 d7f6 f1e2 b8d7 b1d2 f6d5 e2h5 e8e7 f4d6 e7f6 d2b3 d5c3 d6e5 d7e5 d4e5 f6e5 f2f4 e5f6 d1c2 h6f4 g3f4 h8h5 g1e2 c3e2 c2e2 h5h7 h4h5 c8a6 e2d1 e6e5 f4e5 f6e5 d1d8 a8d8 h5h6 a6d3
+
+[WARN  ] [13:11:59.899255] <                    > fastchess --- Warning; Illegal PV move - move e1a1 from alphabeta
+Info; info depth 5 score cp 200 nodes 120687 time 19 nps 6351947 pv e1a1
+Position; fen rnbqkb1r/pp2pppp/2pp1n2/8/3P1B2/2P2N2/PP2PPPP/RN1QKB1R b KQkq - 0 1
+Moves; d6d5 a2a3 a7a5 b2b3 b7b5 e2e3 e7e6 g2g3 g7g6 h2h3 h7h5 a3a4 b5b4 c3c4 d5c4 b3c4 f6d7 e3e4 f7f6 h3h4 f6f5 e4f5 g6f5 c4c5 f8h6 f3g1 d7f6 f1e2 b8d7 b1d2 f6d5 e2h5 e8e7 f4d6 e7f6 d2b3 d5c3 d6e5 d7e5 d4e5 f6e5 f2f4 e5f6 d1c2 h6f4 g3f4 h8h5 g1e2 c3e2 c2e2 h5h7 h4h5 c8a6 e2d1 e6e5 f4e5 f6e5 d1d8 a8d8 h5h6 a6d3 b3a5 d3e4 h1f1 e4d5
+
+[WARN  ] [13:12:42.340088] <                    > fastchess --- Warning; Illegal PV move - move e1h1 from alphabeta
+Info; info depth 3 score cp -400 nodes 14922 time 2 nps 7461000 pv e1h1
+Position; fen rnbq1rk1/p1p1bppp/1p3n2/3p4/3P4/1P2PN2/PB3PPP/RN1QKB1R w KQ - 0 1
+Moves; d1c1 e7b4 b2c3 b4d6 c3b2 d6b4 b2c3 a7a5 a2a3 b4c3 b1c3 c7c5 g2g3 c5d4 c3b1 d4e3 f2e3 a5a4 b3a4 f6e4 f3d4 e4c5 e3e4 d5e4 c1e3 a8a4 d4c2 c5d3 f1d3 e4d3 b1c3 d3c2 c3e2 d8d5
+
+[WARN  ] [13:12:55.593356] <                    > fastchess --- Warning; Illegal PV move - move e8h8 from alphabeta
+Info; info depth 3 score cp 200 nodes 7468 time 0 nps 0 pv e8h8
+Position; fen rnbqk2r/pp1pppbp/5np1/2p5/4P3/3P2P1/PPP2PBP/RNBQK1NR w KQkq - 0 1
+Moves; a2a3 a7a5 b2b3 f6e4 a1a2 e4f2 e1f2 a5a4 b3a4 d7d5 c1e3 d5d4 e3c1 e7e6 h2h3 e6e5 c2c3 d4c3 g1e2 c5c4 d3c4 d8d1 h1d1 a8a4 b1c3 a4c4 c3e4
+
+[WARN  ] [13:13:01.416733] <     135512151615360> fastchess --- Failed to send stop to engine transposition
+[WARN  ] [13:13:01.416840] <     135512151615360> fastchess --- Failed to send quit to engine transposition
+[WARN  ] [13:13:01.416946] <     135512151615360> fastchess --- Failed to send stop to engine alphabeta
+[WARN  ] [13:13:01.416976] <     135512151615360> fastchess --- Failed to send quit to engine alphabeta
+[WARN  ] [13:13:01.417048] <     135512151615360> fastchess --- Failed to send stop to engine transposition
+[WARN  ] [13:13:01.417068] <     135512151615360> fastchess --- Failed to send quit to engine transposition
+[WARN  ] [13:13:01.417152] <     135512151615360> fastchess --- Failed to send stop to engine alphabeta
+[WARN  ] [13:13:01.417171] <     135512151615360> fastchess --- Failed to send quit to engine alphabeta
+[WARN  ] [13:13:01.417244] <     135512151615360> fastchess --- Failed to send stop to engine transposition
+[WARN  ] [13:13:01.417261] <     135512151615360> fastchess --- Failed to send quit to engine transposition
+[WARN  ] [13:13:01.417326] <     135512151615360> fastchess --- Failed to send stop to engine alphabeta
+[WARN  ] [13:13:01.417343] <     135512151615360> fastchess --- Failed to send quit to engine alphabeta
+[WARN  ] [13:13:01.417411] <     135512151615360> fastchess --- Failed to send stop to engine alphabeta
+[WARN  ] [13:13:01.417429] <     135512151615360> fastchess --- Failed to send quit to engine alphabeta
+[WARN  ] [13:13:01.417499] <     135512151615360> fastchess --- Failed to send stop to engine transposition
+[WARN  ] [13:13:01.417517] <     135512151615360> fastchess --- Failed to send quit to engine transposition
+[WARN  ] [13:13:01.417589] <     135512151615360> fastchess --- Failed to send stop to engine alphabeta
+[WARN  ] [13:13:01.417607] <     135512151615360> fastchess --- Failed to send quit to engine alphabeta
+[WARN  ] [13:13:01.417682] <     135512151615360> fastchess --- Failed to send stop to engine transposition
+[WARN  ] [13:13:01.417700] <     135512151615360> fastchess --- Failed to send quit to engine transposition
+[WARN  ] [13:13:01.417780] <     135512151615360> fastchess --- Failed to send stop to engine alphabeta
+[WARN  ] [13:13:01.417801] <     135512151615360> fastchess --- Failed to send quit to engine alphabeta
+[WARN  ] [13:13:01.417873] <     135512151615360> fastchess --- Failed to send stop to engine transposition
+[WARN  ] [13:13:01.417944] <     135512151615360> fastchess --- Failed to send quit to engine transposition
+[WARN  ] [13:13:01.418012] <     135512151615360> fastchess --- Failed to send stop to engine transposition
+[WARN  ] [13:13:01.418029] <     135512151615360> fastchess --- Failed to send quit to engine transposition
+[WARN  ] [13:13:01.418092] <     135512151615360> fastchess --- Failed to send stop to engine alphabeta
+[WARN  ] [13:13:01.418112] <     135512151615360> fastchess --- Failed to send quit to engine alphabeta
+[WARN  ] [13:13:01.418177] <     135512151615360> fastchess --- Failed to send stop to engine alphabeta
+[WARN  ] [13:13:01.418214] <     135512151615360> fastchess --- Failed to send quit to engine alphabeta
+[WARN  ] [13:13:01.418279] <     135512151615360> fastchess --- Failed to send stop to engine transposition
+[WARN  ] [13:13:01.418297] <     135512151615360> fastchess --- Failed to send quit to engine transposition
+[INFO  ] [13:13:01.427154] <                    > fastchess --- Tournament was interrupted. To resume the tournament, run: materials/fastchess/fastchess -config file=config.json
+
+[INFO  ] [13:13:01.427250] <                    > fastchess --- Finished match
+
+[INFO  ] [13:13:01.427277] <                    > fastchess --- Total Time: 00:08:23 (hours:minutes:seconds)
+
+
+[INFO  ] [13:13:13.394477] <                    > fastchess --- fastchess alpha 1.8.2 20260729-74deac2
+[INFO  ] [13:13:13.394560] <                    > fastchess --- Setting seed to: 123456
+[INFO  ] [13:13:13.467474] <                    > fastchess --- Indexing opening suite...
+
+[INFO  ] [13:13:13.520998] <                    > fastchess --- Starting tournament...
+[WARN  ] [13:13:40.557964] <                    > fastchess --- Warning; Illegal PV move - move e1a1 from alphabeta
+Info; info depth 4 score cp -1100 nodes 171204 time 15 nps 11413600 pv e1a1
+Position; fen rnbqkb1r/ppp2ppp/5n2/3pp3/2P5/1Q2P3/PP1P1PPP/RNB1KBNR w KQkq - 0 1
+Moves; c4d5 d8d5 f1b5 c7c6 b5c4 d5g2 c4f7 e8e7 f7d5 f6d5 b1c3 d5c3 b2c3 g2h1 c1a3 e7f6
+
+[WARN  ] [13:13:40.558072] <                    > fastchess --- Warning; Illegal PV move - move e1a1 from alphabeta
+Info; info depth 5 score cp -800 nodes 1480319 time 222 nps 6668103 pv e1a1
+Position; fen rnbqkb1r/ppp2ppp/5n2/3pp3/2P5/1Q2P3/PP1P1PPP/RNB1KBNR w KQkq - 0 1
+Moves; c4d5 d8d5 f1b5 c7c6 b5c4 d5g2 c4f7 e8e7 f7d5 f6d5 b1c3 d5c3 b2c3 g2h1 c1a3 e7f6
+
+[WARN  ] [13:13:40.559898] <                    > fastchess --- Warning; Illegal move e1a1 played by alphabeta
+
+[WARN  ] [13:14:01.691148] <                    > fastchess --- Warning; Illegal PV move - move e8h8 from alphabeta
+Info; info depth 4 score cp -100 nodes 10316 time 3 nps 3438666 pv e8h8
+Position; fen r1bqk1nr/pp1pppbp/2n3p1/2p5/8/P1N1P1P1/1PPP1PBP/R1BQK1NR b KQkq - 0 1
+Moves; c5c4 b2b3 c4b3 c2b3 c6b8 d2d4 g6g5 f2f3 g5g4 f3g4 a7a5 h2h3 d7d6 a3a4 e7e6 e3e4 d6d5 e4d5 d8c7 c3e2 e6d5 h3h4 c7e7 g4g5 b8c6 c1a3 e7e3 a3c1 e3e7 c1b2 c8g4 g2d5 c6b4 b2a3 g7d4 d1d4 b4c2 e1f1 c2d4 a3e7 d4c2 d5b7 c2a1 b7a8 g8e7 e2c1 f7f5 h4h5 h7h6 b3b4 a5b4 g5g6 a1c2 a4a5 f5f4 g3f4
+
+[WARN  ] [13:14:01.691343] <                    > fastchess --- Warning; Illegal PV move - move e8h8 from alphabeta
+Info; info depth 5 score cp 0 nodes 120012 time 29 nps 4138344 pv e8h8
+Position; fen r1bqk1nr/pp1pppbp/2n3p1/2p5/8/P1N1P1P1/1PPP1PBP/R1BQK1NR b KQkq - 0 1
+Moves; c5c4 b2b3 c4b3 c2b3 c6b8 d2d4 g6g5 f2f3 g5g4 f3g4 a7a5 h2h3 d7d6 a3a4 e7e6 e3e4 d6d5 e4d5 d8c7 c3e2 e6d5 h3h4 c7e7 g4g5 b8c6 c1a3 e7e3 a3c1 e3e7 c1b2 c8g4 g2d5 c6b4 b2a3 g7d4 d1d4 b4c2 e1f1 c2d4 a3e7 d4c2 d5b7 c2a1 b7a8 g8e7 e2c1 f7f5 h4h5 h7h6 b3b4 a5b4 g5g6 a1c2 a4a5 f5f4 g3f4
+
+[WARN  ] [13:14:01.691413] <                    > fastchess --- Warning; Illegal PV move - move e8h8 from alphabeta
+Info; info depth 6 score cp -100 nodes 532354 time 154 nps 3456844 pv e8h8
+Position; fen r1bqk1nr/pp1pppbp/2n3p1/2p5/8/P1N1P1P1/1PPP1PBP/R1BQK1NR b KQkq - 0 1
+Moves; c5c4 b2b3 c4b3 c2b3 c6b8 d2d4 g6g5 f2f3 g5g4 f3g4 a7a5 h2h3 d7d6 a3a4 e7e6 e3e4 d6d5 e4d5 d8c7 c3e2 e6d5 h3h4 c7e7 g4g5 b8c6 c1a3 e7e3 a3c1 e3e7 c1b2 c8g4 g2d5 c6b4 b2a3 g7d4 d1d4 b4c2 e1f1 c2d4 a3e7 d4c2 d5b7 c2a1 b7a8 g8e7 e2c1 f7f5 h4h5 h7h6 b3b4 a5b4 g5g6 a1c2 a4a5 f5f4 g3f4
+
+[WARN  ] [13:14:01.691454] <                    > fastchess --- Warning; Illegal move e8h8 played by alphabeta
+
+[WARN  ] [13:14:29.316603] <                    > fastchess --- Warning; Illegal PV move - move e1h1 from alphabeta
+Info; info depth 3 score cp -100 nodes 2784 time 0 nps 0 pv e1h1
+Position; fen r1bqkb1r/pp3ppp/2n1pn2/1Bpp4/P2P4/2P1PN2/1P3PPP/RNBQK2R b KQkq - 0 1
+Moves; c5c4 b2b3 a7a6 b5c6 b7c6 g2g3 c4b3 d1b3 a6a5 h2h3 g7g6 c3c4 d5c4 b3a2 c4c3 g3g4 c6c5 a2c4 c3c2 b1d2 c8b7 e3e4 c5d4 f3d4 f6e4 c4b5 d8d7 b5d7 e8d7 d2e4 b7e4
+
+[WARN  ] [13:14:45.115539] <                    > fastchess --- Warning; Illegal PV move - move e1h1 from alphabeta
+Info; info depth 5 score cp 300 nodes 1480605 time 152 nps 9740822 pv e1h1
+Position; fen r1bqk1nr/pp1pppbp/2n3p1/2p5/8/3P1NP1/PPPNPPBP/R1BQK2R b KQkq - 0 1
+Moves; a7a5 a2a3 a5a4 c2c3 b7b5 e2e3 d7d5 h2h3 e7e5 d3d4 c5c4 b2b4 a4b3 g3g4 b3b2 c1b2 b5b4 a3b4 a8a1 b2a1 c8d7 d4e5 d8a8 e3e4 c6e5 e4d5 g6g5 d5d6 f7f5 g4f5 h7h5 d2c4 e5c4
+
+[WARN  ] [13:14:45.115674] <                    > fastchess --- Warning; Illegal move e1h1 played by alphabeta
+
+[WARN  ] [13:15:25.937346] <                    > fastchess --- Warning; Illegal PV move - move e1h1 from alphabeta
+Info; info depth 3 score cp 0 nodes 8974 time 1 nps 8974000 pv e1h1
+Position; fen r1bqkb1r/ppp1nppp/2n5/3pp3/8/3P1NP1/PPP1PPBP/RNBQK2R w KQkq - 0 1
+Moves; a2a3 d5d4 b2b4 a7a5 b4b5 c6a7 f3e5 f7f6 b5b6 f6e5 b6a7 e7c6 c2c3 c6a7 e2e3 g7g6 c3d4 e5d4 f2f4 c7c5 h2h3 d4e3 c1e3 h7h5 a3a4 h5h4 g3g4 a7c6 g2c6 b7c6 b1a3 f8g7 d3d4 g7d4 e3d4 c5d4
+
+[WARN  ] [13:15:50.451736] <                    > fastchess --- Warning; Illegal PV move - move e1h1 from alphabeta
+Info; info depth 3 score cp -100 nodes 8126 time 1 nps 8126000 pv e1h1
+Position; fen rnbqk2r/ppp1bppp/3p1n2/4p3/2P5/2NP1N1P/PP2PPP1/R1BQKB1R b KQkq - 0 1
+Moves; a7a5 a2a3 b7b6 g2g3 c7c5 h3h4 g7g6 b2b3 h7h5 f1g2 f6d7 e2e3 d7f6 b3b4 a5b4 c3a2 b4a3 f3e5 a8a5 e5f3 b6b5 e3e4 b5b4 d3d4 c5d4 e4e5 d6e5 c4c5 d8d5 a2b4 d5c4 b4a2 d4d3 f3e5 c4d4 e5g6 f7g6 a1b1 f6e4
+
+[WARN  ] [13:15:50.545600] <                    > fastchess --- Warning; Illegal PV move - move e8h8 from alphabeta
+Info; info depth 4 score cp 0 nodes 55657 time 39 nps 1427102 pv e8h8
+Position; fen rnbqkb1r/pp3ppp/2pp1n2/4p3/2PP4/2N1P3/PP2BPPP/R1BQK1NR b KQkq - 0 1
+Moves; e5d4 e3d4 d6d5 a2a3 d5c4 e2c4 a7a5 c1g5 f8a3 b2a3 a5a4 f2f3 c6c5 d4c5 b8d7 c3a4 d8a5 d1d2 a5d2 g5d2 a8a4 c4b5 a4d4 g2g3 b7b6 c5b6 g7g6 h2h3 d4d5 a3a4 f6h5 f3f4 h5g3 b6b7 c8b7 d2c3
+
+[WARN  ] [13:15:50.545721] <                    > fastchess --- Warning; Illegal PV move - move e8h8 from alphabeta
+Info; info depth 5 score cp 200 nodes 623820 time 114 nps 5472105 pv e8h8
+Position; fen rnbqkb1r/pp3ppp/2pp1n2/4p3/2PP4/2N1P3/PP2BPPP/R1BQK1NR b KQkq - 0 1
+Moves; e5d4 e3d4 d6d5 a2a3 d5c4 e2c4 a7a5 c1g5 f8a3 b2a3 a5a4 f2f3 c6c5 d4c5 b8d7 c3a4 d8a5 d1d2 a5d2 g5d2 a8a4 c4b5 a4d4 g2g3 b7b6 c5b6 g7g6 h2h3 d4d5 a3a4 f6h5 f3f4 h5g3 b6b7 c8b7 d2c3
+
+[WARN  ] [13:15:50.545755] <                    > fastchess --- Warning; Illegal move e8h8 played by alphabeta
+
+[WARN  ] [13:15:56.020677] <                    > fastchess --- Warning; Illegal PV move - move e1a1 from alphabeta
+Info; info depth 4 score cp 200 nodes 38116 time 54 nps 705851 pv e1a1
+Position; fen r1bqk1nr/pp1pppbp/6p1/2p5/3nP3/1PNB4/PBPP1PPP/R2QK1NR b KQkq - 0 1
+Moves; g6g5 a2a3 a7a5 h2h4 g5h4 d1g4 d4e6 f2f3 h4h3 g2g3 h3h2 h1h2 b7b6 e4e5 g7e5 f3f4 e5d4 h2h7 d4c3 h7h8 c3h8 g4g8 e6f8 b2h8 e7e5 c2c3 e5f4
+
+[WARN  ] [13:15:56.020817] <                    > fastchess --- Warning; Illegal PV move - move e1a1 from alphabeta
+Info; info depth 5 score cp 600 nodes 664494 time 200 nps 3322470 pv e1a1
+Position; fen r1bqk1nr/pp1pppbp/6p1/2p5/3nP3/1PNB4/PBPP1PPP/R2QK1NR b KQkq - 0 1
+Moves; g6g5 a2a3 a7a5 h2h4 g5h4 d1g4 d4e6 f2f3 h4h3 g2g3 h3h2 h1h2 b7b6 e4e5 g7e5 f3f4 e5d4 h2h7 d4c3 h7h8 c3h8 g4g8 e6f8 b2h8 e7e5 c2c3 e5f4
+
+[WARN  ] [13:15:56.020849] <                    > fastchess --- Warning; Illegal move e1a1 played by alphabeta
+
+[WARN  ] [13:16:09.021451] <                    > fastchess --- Warning; Illegal PV move - move e8a8 from alphabeta
+Info; info depth 4 score cp -500 nodes 16724 time 3 nps 5574666 pv e8a8
+Position; fen r1bqkbnr/ppp1pp1p/2np2p1/8/8/3P1NP1/PPP1PP1P/RNBQKB1R w KQkq - 0 1
+Moves; f3h4 d6d5 a2a3 d5d4 b2b3 g6g5 h4g2 g5g4 e2e3 d4e3 f2e3 a7a5 c2c3 b7b5 a3a4 b5a4 b3a4 e7e5 d3d4 d8d5 c3c4 f8b4 e1f2 d5d6 d4d5 h7h5 g2h4 c6a7 f1e2 c7c5 d1b3 g8f6 h4g2 c8f5 f2f1 f5e4 e2d3 e4d3 b3d3 e5e4 d3d1 d6e5 a1a2 f6d7 g2f4 h5h4 c1b2 e5f5 b2h8
+
+[WARN  ] [13:16:14.494664] <                    > fastchess --- Warning; Illegal PV move - move e1a1 from alphabeta
+Info; info depth 3 score cp 200 nodes 8244 time 3 nps 2748000 pv e1a1
+Position; fen rnbqk2r/pppp1ppp/5n2/8/1b1P4/2N5/PPP2PPP/R1BQKBNR w KQkq - 0 1
+Moves; a2a3 d8e7 g1e2 b4c3 b2c3 f6e4 d1d3 a7a5 g2g3 a5a4 d3e3 b7b5 f1g2 d7d5 f2f3 e4d6 h2h4 e7e3 c1e3 d6c4 e3c1 c7c6 f3f4 c8f5 g3g4 f5c2 e2g3 c2d3 f4f5 f7f6 c1f4 b5b4 a3b4 a4a3 g3h5 e8f7
+
+[WARN  ] [13:16:24.254408] <                    > fastchess --- Warning; Illegal PV move - move e8a8 from alphabeta
+Info; info depth 3 score cp -400 nodes 2582 time 0 nps 0 pv e8a8
+Position; fen r1bqkbnr/pp1p1p1p/2n1p1p1/2p5/4P3/2PP1N2/PP3PPP/RNBQKB1R w KQkq - 0 1
+Moves; b2b3 e6e5 a2a3 a7a5 g2g3 d7d5 e4d5 d8d5 h2h3 e5e4 c3c4 d5f5 d3e4 f5e4 d1e2 e4e2 f1e2 f7f6 a3a4 g6g5 g3g4 b7b6 b1d2 h7h5 g4h5 g5g4 f3g1 c6b4 e2d1 g4h3 g1h3 f6f5 c1a3 f8h6 f2f3 g8e7 f3f4 b4d3 e1f1 d3f4 d1f3 f4h3 a3b2 h3f4 b2h8 f4d5 c4d5 e7g8 d5d6 c8a6 d2c4
+
+[WARN  ] [13:16:24.625588] <                    > fastchess --- Warning; Illegal PV move - move e8a8 from alphabeta
+Info; info depth 3 score cp -400 nodes 2015 time 0 nps 0 pv e8a8
+Position; fen r1bqkbnr/pp1p1p1p/2n1p1p1/2p5/4P3/2PP1N2/PP3PPP/RNBQKB1R w KQkq - 0 1
+Moves; b2b3 e6e5 a2a3 a7a5 g2g3 d7d5 e4d5 d8d5 h2h3 e5e4 c3c4 d5f5 d3e4 f5e4 d1e2 e4e2 f1e2 f7f6 a3a4 g6g5 g3g4 b7b6 b1d2 h7h5 g4h5 g5g4 f3g1 c6b4 e2d1 g4h3 g1h3 f6f5 c1a3 f8h6 f2f3 g8e7 f3f4 b4d3 e1f1 d3f4 d1f3 f4h3 a3b2 h3f4 b2h8 f4d5 c4d5 e7g8 d5d6 c8a6 d2c4 a6c4 b3c4
+
+[WARN  ] [13:16:40.697961] <                    > fastchess --- Warning; Illegal PV move - move e8h8 from alphabeta
+Info; info depth 5 score cp -500 nodes 542074 time 184 nps 2946054 pv e8h8
+Position; fen rnbqkb1r/pp3ppp/2p2n2/3p4/8/2N1P1P1/PP1PNP1P/R1BQKB1R b KQkq - 0 1
+Moves; c8g4 d1b3 b7b5 e2g1 b5b4 f2f3 b4c3 f3g4 c3b2 c1b2 f6g4 h2h3 b8a6 h3g4 a6c5 b3c2 f8d6 g1e2 d5d4 e3d4 d6g3 e2g3 c5d7 c2c6 a7a5 a2a4 a8a7 g3e4
+
+[WARN  ] [13:16:40.698160] <                    > fastchess --- Warning; Illegal move e8h8 played by alphabeta
+
+[WARN  ] [13:16:55.921244] <                    > fastchess --- Warning; Illegal PV move - move e1a1 from alphabeta
+Info; info depth 4 score cp 200 nodes 45078 time 6 nps 7513000 pv e1a1
+Position; fen rnb1kb1r/pp2pppp/2pp1n2/q7/P3P3/2N2N2/1PPP1PPP/R1BQKB1R w KQkq - 0 1
+Moves; b2b3 c8g4 g2g3 c6c5 h2h3 g4f3 d1f3 a7a6 e4e5 c5c4 e5f6 c4b3 f3b7 b3b2 b7c8 a5d8 c8d8 e8d8 f6e7 f8e7 c1b2 e7f6
+
+[WARN  ] [13:18:04.758317] <                    > fastchess --- Warning; Illegal PV move - move e8a8 from alphabeta
+Info; info depth 5 score cp 0 nodes 865929 time 115 nps 7529817 pv e8a8
+Position; fen r1bqk1nr/pppp1ppp/2n5/4P3/1b6/2N1P3/PPP2PPP/R1BQKBNR b KQkq - 0 1
+Moves; a7a5 a2a3 b4c3 b2c3 a5a4 f2f4 b7b6 g2g3 g7g5 f1g2 g5f4 e3f4 b6b5 h2h3 d7d5 e5d6 c8b7 d6c7 d8c7 c1d2 b5b4 a3b4 c6b4 c3b4 b7g2 h1h2 g2e4 h2e2 c7c4 g1f3 a4a3 f3g5 g8f6 c2c3
+
+[WARN  ] [13:18:04.760882] <                    > fastchess --- Warning; Illegal move e8a8 played by alphabeta
+
+[WARN  ] [13:18:09.278560] <                    > fastchess --- Warning; Illegal PV move - move e1a1 from alphabeta
+Info; info depth 3 score cp 500 nodes 7622 time 0 nps 0 pv e1a1
+Position; fen rn1q1rk1/pbp1ppbp/1p1p1np1/8/2PP4/1P2PN2/PB2BPPP/RN1QK2R w KQ - 0 1
+Moves; a2a3 f6d7 g2g3 d6d5 c4d5 b7d5 h2h3 a7a5 a3a4 g6g5 g3g4 b6b5 e2b5 c7c6 b1c3 c6b5 c3d5 b5a4 b3a4 e7e6 d5c3 f7f5 g4f5 f8f5 e3e4 f5f3 d1f3 g7d4 h3h4 d7e5 f3g3 g5g4
+
+[WARN  ] [13:18:09.278779] <                    > fastchess --- Warning; Illegal PV move - move e1a1 from alphabeta
+Info; info depth 4 score cp 0 nodes 34732 time 4 nps 8683000 pv e1a1
+Position; fen rn1q1rk1/pbp1ppbp/1p1p1np1/8/2PP4/1P2PN2/PB2BPPP/RN1QK2R w KQ - 0 1
+Moves; a2a3 f6d7 g2g3 d6d5 c4d5 b7d5 h2h3 a7a5 a3a4 g6g5 g3g4 b6b5 e2b5 c7c6 b1c3 c6b5 c3d5 b5a4 b3a4 e7e6 d5c3 f7f5 g4f5 f8f5 e3e4 f5f3 d1f3 g7d4 h3h4 d7e5 f3g3 g5g4
+
+[WARN  ] [13:18:40.121856] <                    > fastchess --- Warning; Illegal PV move - move e8h8 from alphabeta
+Info; info depth 4 score cp -400 nodes 58653 time 8 nps 7331625 pv e8h8
+Position; fen rnbqk2r/pp2nppp/4p3/2ppP3/1b1P4/2NB1N2/PPP2PPP/R1BQK2R w KQkq - 0 1
+Moves; a2a3 b4c3 b2c3 c5c4 d3f1 a7a5 g2g3 a5a4 h2h3 b7b5 g3g4 f7f5 g4f5 e6f5 h3h4 f5f4 c1f4 b5b4 a3b4 e7f5 b4b5 a4a3 e5e6 f5d6 b5b6 a3a2 b6b7 d6b7 f4b8 a8b8 f3g5 b7a5 a1a2
+
+[WARN  ] [13:19:13.748492] <                    > fastchess --- Warning; Illegal PV move - move e1h1 from alphabeta
+Info; info depth 7 score cp 0 nodes 1526698 time 184 nps 8297271 pv e1h1
+Position; fen rnbqk2r/ppp1bppp/5n2/3p4/3P4/2N1P1P1/PP3P1P/R1BQKBNR b KQkq - 0 1
+Moves; e7b4 a2a3 b4c3 b2c3 a7a5 f1h3 a5a4 f2f3 b7b5 h3c8 d8c8 h2h3 c7c5 d1e2 c5c4 e3e4 d5e4 f3e4 g7g6 g3g4 f6d7 h3h4 f7f6 d4d5 d7e5 c1d2 c8g4 e2g4 e5g4 h4h5 f6f5 e4f5 g6f5 d2f4 h7h6 g1e2 g4f6 f4e5 b8d7 e5h2 f6e4 d5d6 d7c5 e2c1 c5b3 c1b3 a4b3
+
+[WARN  ] [13:19:13.748583] <                    > fastchess --- Warning; Illegal move e1h1 played by alphabeta
+
+[WARN  ] [13:19:20.728354] <                    > fastchess --- Warning; Illegal PV move - move e8h8 from alphabeta
+Info; info depth 5 score cp 100 nodes 190649 time 21 nps 9078523 pv e8h8
+Position; fen rnb1k2r/ppp1ppbp/8/8/8/8/PPPB1PPP/R3KBNR w KQkq - 0 1
+Moves; d2c3 e7e5 a2a3 a7a5 b2b3
+
+[WARN  ] [13:20:49.746097] <                    > fastchess --- Warning; Illegal PV move - move e1h1 from alphabeta
+Info; info depth 4 score cp -100 nodes 125876 time 17 nps 7404470 pv e1h1
+Position; fen rnbqkb1r/pp2pppp/2pp1n2/8/3P1B2/2P2N2/PP2PPPP/RN1QKB1R b KQkq - 0 1
+Moves; d6d5 a2a3 a7a5 b2b3 b7b5 e2e3 e7e6 g2g3 g7g6 h2h3 h7h5 a3a4 b5b4 c3c4 d5c4 b3c4 f6d7 e3e4 f7f6 h3h4 f6f5 e4f5 g6f5 c4c5 f8h6 f3g1 d7f6 f1e2 b8d7 b1d2 f6d5 e2h5 e8e7 f4d6 e7f6 d2b3 d5c3 d6e5 d7e5 d4e5 f6e5 d1c2 h6f8 f2f4 e5f6 g3g4 e6e5 f4e5 f6e5 g1f3 e5f4
+
+[WARN  ] [13:20:49.746597] <                    > fastchess --- Warning; Illegal move e1h1 played by alphabeta
+
+[WARN  ] [13:20:52.994012] <                    > fastchess --- Warning; Illegal PV move - move e8h8 from alphabeta
+Info; info depth 3 score cp 200 nodes 9946 time 0 nps 0 pv e8h8
+Position; fen rnbqkbnr/1p1p1ppp/p3p3/2p5/8/3PP3/PPPN1PPP/R1BQKBNR w KQkq - 0 1
+Moves; a2a3 a6a5 b2b3 a5a4 c2c3 a4b3 f2f4 b3b2 c1b2 b7b5 g2g3 d7d5 h2h3 c5c4 d3c4 b5c4 d2b1 e6e5 f4e5 b8c6 e5e6 f7e6 h3h4 e6e5 a3a4 e5e4 a4a5 g7g6 d1a4 d8d6 g1e2 a8a5 a4d1 f8h6 a1a5 c6a5 g3g4 a5b3 g4g5 h6g7 b1d2 b3d2 d1d2 h7h5 g5h6 g8h6 e2f4 d5d4 c3d4 c8a6 d2a5
+
+[WARN  ] [13:22:00.099433] <                    > fastchess --- Warning; Illegal PV move - move e8a8 from alphabeta
+Info; info depth 3 score cp -100 nodes 4517 time 0 nps 0 pv e8a8
+Position; fen r1bqk1nr/pp2ppbp/2np2p1/2p5/4PP2/2P3P1/PP1P2BP/RNBQK1NR w KQkq - 0 1
+Moves; a2a3 c5c4 b2b3 c4b3 d1b3 a7a5 d2d3 a5a4 b3d1 g6g5 f4g5 b7b5 h2h3 e7e5 d3d4 e5d4 e4e5 d6d5 c3d4 c8f5 g3g4 f5g6 h3h4 f7f6 e5f6 g7f8 h4h5 g6b1 a1b1 d8a5 e1f1
+
+[WARN  ] [13:22:09.614698] <                    > fastchess --- Warning; Illegal PV move - move e8h8 from alphabeta
+Info; info depth 5 score cp -200 nodes 304054 time 31 nps 9808193 pv e8h8
+Position; fen rnbqk2r/ppppnpbp/4p1p1/8/8/3P1NP1/PPP1PPBP/RNBQ1RK1 b kq - 0 1
+Moves; g6g5 f3g5 a7a5 a2a3 a5a4 c2c3 c7c5 e2e3 d7d5 b2b3 a4b3 d1b3 e6e5 b3b5 e7c6 g5f3 e5e4 f3e1 e4d3 f2f3 c5c4 a3a4 b7b6 h2h3 f7f5 f3f4 c8e6 h3h4 h7h5 e1f3 e6f7 f3e1 f7e6 e3e4 d5e4 c1d2 e6d5 d2c1 b8a6 c1e3 a6c7 b5b2 b6b5 a4b5 d3d2 b1d2 a8a1 b2a1 c7b5 d2b1 b5d6 b1d2 c6a5 e1c2 a5c6 f1b1 d6f7 c2e1 c6a5 e3b6 d8a8 a1a5 a8a5 b6a5
+
+[WARN  ] [13:24:32.554717] <                    > fastchess --- Warning; Illegal PV move - move e1h1 from alphabeta
+Info; info depth 5 score cp 700 nodes 57084 time 8 nps 7135500 pv e1h1
+Position; fen rn1qkb1r/1pp1pppp/p4n2/3p1b2/3P4/2P2NP1/PP2PP1P/RNBQKB1R w KQkq - 0 1
+Moves; b1d2 a6a5 a2a3 a5a4 b2b3 a4b3 d2b3 f5e4 e2e3 e7e6 h2h3 b7b6 a3a4 c7c6 g3g4 h7h5 g4g5 f6d7 h3h4 c6c5 d4c5 b6c5 b3d2 e4f3 d2f3 c5c4 f3d2 f7f6 f2f4 e6e5 f1e2 g7g6 d2f1 d7c5 f4e5 f6e5 a4a5 c5b3 a1b1 a8a5 e3e4 b3c1 b1c1 d5e4 f1d2 e4e3 d2c4 f8a3 d1d8 e8d8 c1d1 b8d7 c4a5 a3b2 d1d3 e5e4 d3e3 d7c5
+
+[WARN  ] [13:25:04.642510] <                    > fastchess --- Warning; Illegal PV move - move e1h1 from alphabeta
+Info; info depth 5 score cp -600 nodes 739438 time 114 nps 6486298 pv e1h1
+Position; fen rnbq1rk1/ppp1bppp/4pn2/3p4/3PP3/2N2N2/PPP1QPPP/R1B1KB1R w KQ - 0 1
+Moves; e4d5 e6d5 c1g5 a7a5 a2a3 h7h6 c3d5 f6d5 g5c1 f8e8 f3e5 d5b6 c2c3 f7f6 b2b3 f6e5 d4e5 c7c5 e2b5 b8c6 f1c4 g8f8 g2g3 c6d4 c3d4 c8d7 d4c5 d7b5 c4b5 d8d4 c5b6 d4a1
+
+[WARN  ] [13:25:04.642630] <                    > fastchess --- Warning; Illegal move e1h1 played by alphabeta
+
+[WARN  ] [13:25:58.672233] <                    > fastchess --- Warning; Illegal PV move - move e8h8 from alphabeta
+Info; info depth 5 score cp 0 nodes 807449 time 117 nps 6901273 pv e8h8
+Position; fen rnbqk1nr/ppp2ppp/3b4/3p4/3P4/2P2N2/PP3PPP/RNBQKB1R b KQkq - 0 1
+Moves; h7h6 a2a3 a7a5 c1e3 d8e7 g2g3 c8g4 d1a4 b7b5 f1b5 g4d7 b5d7 b8d7 f3e5 d6e5 d4e5 a8b8 a4c6 e7e5 b2b4 a5b4 a3b4 g8e7 c6a4 h6h5 e1g1 e5e4 h2h3 c7c6 b1d2 e4d3 a4a7 d5d4 e3f4 d4c3 f4b8 c3d2 b8f4 e7c8 a7b7 c8b6 f4c7 h5h4 c7b6 d7b6 b7b6
+
+[WARN  ] [13:25:58.673103] <                    > fastchess --- Warning; Illegal move e8h8 played by alphabeta
+
+[INFO  ] [13:27:06.117459] <                    > fastchess --- SPRT ([0.00, 10.00]) completed - H1 was accepted
+[INFO  ] [13:27:08.467433] <                    > fastchess --- Finished match
+
+[INFO  ] [13:27:08.467549] <                    > fastchess --- Total Time: 00:13:55 (hours:minutes:seconds)
+
+

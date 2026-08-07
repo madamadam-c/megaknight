@@ -1,15 +1,22 @@
 use std::{
+    cmp::{max, min},
     ops::Neg,
     sync::{
-        atomic::{AtomicBool, Ordering},
         Arc,
+        atomic::{AtomicBool, Ordering},
     },
     time::{Duration, Instant},
 };
 
 use cozy_chess::{Board, Color, GameStatus, Move};
 
-use crate::evaluate::eval;
+use crate::{
+    evaluate::eval,
+    transposition::{
+        NodeType::{EXACT, LOWER, UPPER},
+        Table, TableEntry,
+    },
+};
 
 #[derive(Clone, Default)]
 pub struct SearchLimits {
@@ -151,14 +158,22 @@ fn time_budget_ms(board: &Board, limits: &SearchLimits) -> Option<u64> {
     Some(allocation.min(available).max(1))
 }
 
-pub struct Engine {}
+pub struct Engine {
+    tt: Table,
+}
 
 impl Engine {
-    pub const fn new() -> Self {
-        Self {}
+    pub fn new() -> Self {
+        Self {
+            tt: Table::new_for_mb(16),
+        }
     }
 
     pub fn new_game(&mut self) {}
+
+    pub fn set_hash_size_mb(&mut self, megabytes: u64) {
+        self.tt = Table::new_for_mb(megabytes);
+    }
 
     fn minimax(
         &mut self,
@@ -175,21 +190,47 @@ impl Engine {
             return Some(eval(board));
         }
 
+        let original_bounds = bounds;
+
         let mut moves = Vec::new();
+
+        let key = board.hash();
+        if let Some(entry) = self.tt.get(key) {
+            if let Some(mv) = entry.best_move
+                && board.is_legal(mv)
+            {
+                moves.push(mv);
+            }
+            if entry.depth >= depth {
+                match entry.node_type {
+                    EXACT => return Some(entry.score),
+                    UPPER => bounds.beta = min(bounds.beta, entry.score),
+                    LOWER => bounds.alpha = max(bounds.alpha, entry.score),
+                }
+
+                if bounds.alpha >= bounds.beta {
+                    return Some(entry.score);
+                }
+            }
+        }
+
         board.generate_moves(|moves_for_piece| {
             moves.extend(moves_for_piece);
             false
         });
 
         let mut result = -1_000_000_000;
-        for chess_move in moves {
+        let mut best = moves[0];
+
+        for mv in moves {
             let mut next_board = board.clone();
-            next_board.play(chess_move);
+            next_board.play(mv);
 
             let x = -self.minimax(&next_board, depth - 1, -bounds, context)?;
 
             if x > result {
                 result = x;
+                best = mv;
                 if x > bounds.alpha {
                     bounds.alpha = x;
                 }
@@ -200,6 +241,26 @@ impl Engine {
             }
         }
 
+        let node_type = {
+            if result >= original_bounds.beta {
+                LOWER
+            } else if result <= original_bounds.alpha {
+                UPPER
+            } else {
+                EXACT
+            }
+        };
+
+        self.tt.insert(
+            key,
+            TableEntry {
+                key: key,
+                score: result,
+                depth: depth,
+                node_type: node_type,
+                best_move: Some(best),
+            },
+        );
         Some(result)
     }
 
@@ -217,13 +278,13 @@ impl Engine {
             beta: 1_000_000_000,
         };
 
-        for &chess_move in root_moves {
+        for &mv in root_moves {
             if context.should_stop() {
                 return None;
             }
 
             let mut next_board = board.clone();
-            next_board.play(chess_move);
+            next_board.play(mv);
 
             let score = -self.minimax(&next_board, depth - 1, -bounds, context)?;
             if score > best_score {
@@ -231,7 +292,7 @@ impl Engine {
                 if score > bounds.alpha {
                     bounds.alpha = score;
                 }
-                best_move = Some(chess_move);
+                best_move = Some(mv);
             }
 
             if score >= bounds.beta {
@@ -239,7 +300,7 @@ impl Engine {
             }
         }
 
-        best_move.map(|chess_move| (chess_move, best_score))
+        best_move.map(|mv| (mv, best_score))
     }
 
     pub fn search<F>(&mut self, request: &SearchRequest, mut report: F) -> SearchResult
@@ -253,7 +314,7 @@ impl Engine {
         });
 
         if !request.limits.searchmoves.is_empty() {
-            root_moves.retain(|chess_move| request.limits.searchmoves.contains(chess_move));
+            root_moves.retain(|mv| request.limits.searchmoves.contains(mv));
         }
 
         if root_moves.is_empty() {

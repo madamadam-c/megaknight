@@ -1,28 +1,31 @@
 use std::{
     io::{self, BufRead, Write},
     sync::{
+        Arc,
         atomic::{AtomicBool, Ordering},
-        mpsc, Arc,
+        mpsc,
     },
     thread::{self, JoinHandle},
     time::Duration,
 };
 
 use cozy_chess::{
-    util::{display_uci_move, parse_uci_move},
     Board, Move,
+    util::{display_uci_move, parse_uci_move},
 };
 
 use crate::engine::{Engine, SearchInfo, SearchLimits, SearchRequest, SearchResult};
 
 mod engine;
 mod evaluate;
+mod transposition;
 
 #[cfg(test)]
 mod tests;
 
 enum Command {
     Go { id: u64, request: SearchRequest },
+    SetHash(u64),
     NewGame,
     Quit,
 }
@@ -129,6 +132,23 @@ fn parse_next<T: std::str::FromStr>(parts: &[&str], index: &mut usize) -> Option
     parts.get(*index)?.parse().ok()
 }
 
+fn parse_hash_option(line: &str) -> Option<u64> {
+    let parts: Vec<&str> = line.split_whitespace().collect();
+    let name_start = parts.iter().position(|part| *part == "name")? + 1;
+    let value_start = parts.iter().position(|part| *part == "value")?;
+    let name = parts.get(name_start..value_start)?.join(" ");
+
+    if !name.eq_ignore_ascii_case("hash") {
+        return None;
+    }
+
+    parts
+        .get(value_start + 1)?
+        .parse::<u64>()
+        .ok()
+        .map(|megabytes| megabytes.clamp(1, 65_536))
+}
+
 fn print_output(output: &str) {
     println!("{output}");
     io::stdout().flush().unwrap();
@@ -222,6 +242,7 @@ fn main() {
                         result,
                     });
                 }
+                Command::SetHash(megabytes) => engine.set_hash_size_mb(megabytes),
                 Command::NewGame => engine.new_game(),
                 Command::Quit => break,
             }
@@ -256,6 +277,7 @@ fn main() {
             Some("uci") => {
                 print_output("id name chessbot");
                 print_output("id author me");
+                print_output("option name Hash type spin default 16 min 1 max 65536");
                 print_output("uciok");
             }
             Some("isready") => print_output("readyok"),
@@ -295,7 +317,14 @@ fn main() {
                 let _ = command_tx.send(Command::Quit);
                 quitting = true;
             }
-            Some("setoption") => {}
+            Some("setoption") => {
+                if let Some(megabytes) = parse_hash_option(&line) {
+                    if let Some((_, stop)) = &active_search {
+                        stop.store(true, Ordering::Relaxed);
+                    }
+                    let _ = command_tx.send(Command::SetHash(megabytes));
+                }
+            }
             _ => {}
         }
     }
