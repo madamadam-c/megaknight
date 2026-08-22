@@ -170,6 +170,7 @@ struct EngineMove {
 }
 
 impl EngineMove {
+    #[inline(always)]
     pub fn new(board: &Board, mv: Move, piece: Piece, is_tt: bool) -> Self {
         let mut material_value = 0;
         let mut capture = false;
@@ -182,11 +183,11 @@ impl EngineMove {
             promotion = true;
         }
 
-        if piece == Pawn && mv.from.file() != mv.to.file() && board.piece_on(mv.to).is_none() {
+        if board.en_passant().is_some() && piece == Pawn && mv.from.file() != mv.to.file() && board.piece_on(mv.to).is_none() {
             material_value += value(Pawn);
             capture = true; ep = true;
             target_type = Some(Pawn);
-        } else if let Some(target) = board.piece_on(mv.to) {
+        } else if let Some(target) = board.piece_on(mv.to) && board.color_on(mv.to) != board.color_on(mv.from) {
             material_value += value(target);
             capture = true;
             target_type = Some(target);
@@ -207,12 +208,14 @@ impl EngineMove {
 
 pub struct Engine {
     tt: Table,
+    eval: i32,
 }
 
 impl Engine {
     pub fn new() -> Self {
         Self {
             tt: Table::new_for_mb(16),
+            eval: 0,
         }
     }
 
@@ -223,35 +226,37 @@ impl Engine {
     }
 
     fn generate_moves(&self, board: &Board, tt_move: Option<Move>, non_captures: bool) -> Vec<EngineMove> {
-        let mut captures = Vec::new();
-        let mut moves = Vec::new();
+        let mut moves = Vec::with_capacity(64);
+        let mut captures_len = 0;
 
         board.generate_moves(|moves_for_piece| {
             for mv in moves_for_piece {
-                let emv = EngineMove::new(board, mv, moves_for_piece.piece, tt_move.is_some() && mv == tt_move.unwrap());
+                let emv = EngineMove::new(
+                    board,
+                    mv,
+                    moves_for_piece.piece,
+                    tt_move == Some(mv),
+                );
+
                 if emv.is_capture || emv.is_tt {
-                    captures.push(emv);
-                } else {
+                    moves.insert(captures_len, emv);
+                    captures_len += 1;
+                } else if non_captures {
                     moves.push(emv);
                 }
             }
             false
         });
 
-        captures.sort_by_key(|k| {
-            if k.is_tt {
-                return 1_000_000;
-            } else if k.is_capture {
-                return value(k.target_type.unwrap()) - value(k.piece_type);
+        moves[..captures_len].sort_by_key(|mv| {
+            if mv.is_tt {
+                -1_000_000
             } else {
-                return 0;
+                value(mv.piece_type) - value(mv.target_type.unwrap())
             }
         });
 
-        if non_captures {
-            captures.extend(moves);
-        }
-        return captures;
+        return moves;
     }
 
     // fn quiesce(
@@ -314,8 +319,20 @@ impl Engine {
         //     return self.quiesce(board, bounds, context);
         // }
 
-        if depth <= 0 || board.status() != GameStatus::Ongoing {
-            return Some(eval(board));
+        if board.halfmove_clock() >= 100 {
+            if board.generate_moves(|_| true) {
+                return Some(0);
+            } else {
+                return Some(eval(board));
+            }
+        }
+
+        if depth <= 0 {
+            if board.generate_moves(|_| true) {
+                return Some(self.eval);
+            } else {
+                return Some(eval(board));
+            }
         }
 
         let original_bounds = bounds;
@@ -342,14 +359,24 @@ impl Engine {
         }
 
         let moves = self.generate_moves(board, tt_move, true);
+
+        if moves.is_empty() {
+            return Some(eval(board));
+        }
+
         let mut result = -1_000_000_000;
         let mut best = moves[0];
-
         for mv in moves {
             let mut next_board = board.clone();
-            next_board.play(mv.mv);
+            next_board.play_unchecked(mv.mv);
 
+            self.eval += mv.material_value;
+            self.eval = -self.eval;
+            
             let x = -self.minimax(&next_board, depth - 1, -bounds, context)?;
+            
+            self.eval = -self.eval;
+            self.eval -= mv.material_value;
 
             if x > result {
                 result = x;
@@ -401,15 +428,24 @@ impl Engine {
             beta: 1_000_000_000,
         };
 
-        for &mv in root_moves {
+        self.eval = eval(board);
+        for &emv in root_moves {
+            let mv = EngineMove::new(board, emv, board.piece_on(emv.from).unwrap(), false);
             if context.should_stop() {
                 return None;
             }
 
             let mut next_board = board.clone();
-            next_board.play(mv);
+            next_board.play_unchecked(mv.mv);
+
+            self.eval += mv.material_value;
+            self.eval = -self.eval;
 
             let score = -self.minimax(&next_board, depth - 1, -bounds, context)?;
+
+            self.eval = -self.eval;
+            self.eval -= mv.material_value;
+
             if score > best_score {
                 best_score = score;
                 if score > bounds.alpha {
@@ -423,7 +459,7 @@ impl Engine {
             }
         }
 
-        best_move.map(|mv| (mv, best_score))
+        best_move.map(|mv| (mv.mv, best_score))
     }
 
     pub fn search<F>(&mut self, request: &SearchRequest, mut report: F) -> SearchResult
