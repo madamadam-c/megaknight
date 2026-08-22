@@ -8,11 +8,10 @@ use std::{
     time::{Duration, Instant},
 };
 
-use cozy_chess::{Board, Color, GameStatus, Move};
+use cozy_chess::{Board, Color, GameStatus, Move, Piece::{self, Pawn}};
 
 use crate::{
-    evaluate::eval,
-    transposition::{
+    evaluate::{eval, value}, transposition::{
         NodeType::{EXACT, LOWER, UPPER},
         Table, TableEntry,
     },
@@ -158,6 +157,54 @@ fn time_budget_ms(board: &Board, limits: &SearchLimits) -> Option<u64> {
     Some(allocation.min(available).max(1))
 }
 
+#[derive(Clone, Copy)]
+struct EngineMove {
+    mv: Move,
+    material_value: i32,
+    is_capture: bool,
+    is_ep: bool,
+    is_tt: bool, 
+    promotion: bool,
+    piece_type: Piece,
+    target_type: Option<Piece>
+}
+
+impl EngineMove {
+    pub fn new(board: &Board, mv: Move, piece: Piece, is_tt: bool) -> Self {
+        let mut material_value = 0;
+        let mut capture = false;
+        let mut ep = false;
+        let mut promotion = false;
+        let mut target_type = None;
+
+        if mv.promotion.is_some() {
+            material_value += value(mv.promotion.unwrap()) - value(piece);
+            promotion = true;
+        }
+
+        if piece == Pawn && mv.from.file() != mv.to.file() && board.piece_on(mv.to).is_none() {
+            material_value += value(Pawn);
+            capture = true; ep = true;
+            target_type = Some(Pawn);
+        } else if let Some(target) = board.piece_on(mv.to) {
+            material_value += value(target);
+            capture = true;
+            target_type = Some(target);
+        }
+        
+        Self {
+            mv: mv,
+            material_value: material_value,
+            is_capture: capture,
+            is_ep: ep,
+            is_tt: is_tt,
+            promotion: promotion,
+            piece_type: piece,
+            target_type: target_type
+        }
+    }
+}
+
 pub struct Engine {
     tt: Table,
 }
@@ -175,6 +222,83 @@ impl Engine {
         self.tt = Table::new_for_mb(megabytes);
     }
 
+    fn generate_moves(&self, board: &Board, tt_move: Option<Move>, non_captures: bool) -> Vec<EngineMove> {
+        let mut captures = Vec::new();
+        let mut moves = Vec::new();
+
+        board.generate_moves(|moves_for_piece| {
+            for mv in moves_for_piece {
+                let emv = EngineMove::new(board, mv, moves_for_piece.piece, tt_move.is_some() && mv == tt_move.unwrap());
+                if emv.is_capture || emv.is_tt {
+                    captures.push(emv);
+                } else {
+                    moves.push(emv);
+                }
+            }
+            false
+        });
+
+        captures.sort_by_key(|k| {
+            if k.is_tt {
+                return 1_000_000;
+            } else if k.is_capture {
+                return value(k.target_type.unwrap()) - value(k.piece_type);
+            } else {
+                return 0;
+            }
+        });
+
+        if non_captures {
+            captures.extend(moves);
+        }
+        return captures;
+    }
+
+    // fn quiesce(
+    //     &mut self,
+    //     board: &Board,
+    //     mut bounds: SearchBounds,
+    //     context: &mut SearchContext,
+    // ) -> Option<i32> {
+    //     if context.should_stop() {
+    //         return None;
+    //     }
+
+    //     let static_eval = eval(board);
+    //     if board.status() != GameStatus::Ongoing {
+    //         return Some(static_eval);
+    //     }
+    //     if static_eval >= bounds.beta {
+    //         return Some(static_eval);
+    //     }
+    //     if static_eval > bounds.alpha {
+    //         bounds.alpha = static_eval;
+    //     }
+
+    //     let moves = self.generate_moves(board, None, false);
+
+    //     let mut result = static_eval;
+    //     for mv in moves {
+    //         let mut next_board = board.clone();
+    //         next_board.play(mv);
+
+    //         let x = -self.quiesce(&next_board, -bounds, context)?;
+
+    //         if x > result {
+    //             result = x;
+    //             if x > bounds.alpha {
+    //                 bounds.alpha = x;
+    //             }
+    //         }
+
+    //         if x >= bounds.beta {
+    //             break;
+    //         }
+    //     }
+
+    //     Some(result)
+    // }
+
     fn minimax(
         &mut self,
         board: &Board,
@@ -186,20 +310,23 @@ impl Engine {
             return None;
         }
 
+        // if depth <= 0 {
+        //     return self.quiesce(board, bounds, context);
+        // }
+
         if depth <= 0 || board.status() != GameStatus::Ongoing {
             return Some(eval(board));
         }
 
         let original_bounds = bounds;
 
-        let mut moves = Vec::new();
-
         let key = board.hash();
+        let mut tt_move = None;
         if let Some(entry) = self.tt.get(key) {
             if let Some(mv) = entry.best_move
                 && board.is_legal(mv)
             {
-                moves.push(mv);
+                tt_move = Some(mv);
             }
             if entry.depth >= depth {
                 match entry.node_type {
@@ -214,17 +341,13 @@ impl Engine {
             }
         }
 
-        board.generate_moves(|moves_for_piece| {
-            moves.extend(moves_for_piece);
-            false
-        });
-
+        let moves = self.generate_moves(board, tt_move, true);
         let mut result = -1_000_000_000;
         let mut best = moves[0];
 
         for mv in moves {
             let mut next_board = board.clone();
-            next_board.play(mv);
+            next_board.play(mv.mv);
 
             let x = -self.minimax(&next_board, depth - 1, -bounds, context)?;
 
@@ -258,7 +381,7 @@ impl Engine {
                 score: result,
                 depth: depth,
                 node_type: node_type,
-                best_move: Some(best),
+                best_move: Some(best.mv),
             },
         );
         Some(result)

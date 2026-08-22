@@ -1,6 +1,6 @@
 use cozy_chess::{Board, GameStatus, Piece};
 
-fn value(piece: Piece) -> i32 {
+pub fn value(piece: Piece) -> i32 {
     match piece {
         Piece::Pawn => 100,
         Piece::Knight => 300,

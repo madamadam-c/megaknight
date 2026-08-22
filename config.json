@@ -32,7 +32,7 @@
         "additional_lines_rgx": [],
         "event_name": "Fastchess Tournament",
         "site": "?",
-        "file": "/home/david/Development/chessbot/results/alphabeta-vs-tt.pgn",
+        "file": "/home/david/Development/chessbot/results/mvv-vs-quiesce.pgn",
         "notation": 0,
         "append_file": true,
         "track_nodes": true,
@@ -80,7 +80,7 @@
     "check_mate_pvs": false,
     "show_latency": false,
     "log": {
-        "file": "/home/david/Development/chessbot/results/alphabeta-vs-tt.log",
+        "file": "/home/david/Development/chessbot/results/mvv-vs-quiesce.log",
         "level": 2,
         "append_file": true,
         "compress": false,
@@ -89,9 +89,9 @@
     },
     "engines": [
         {
-            "name": "transposition",
+            "name": "quiesce",
             "dir": "",
-            "cmd": "/home/david/Development/chessbot/models/transpositiontable",
+            "cmd": "/home/david/Development/chessbot/models/quiesce",
             "args": "",
             "restart": false,
             "options": [],
@@ -109,9 +109,9 @@
             "variant": 0
         },
         {
-            "name": "alphabeta",
+            "name": "mvv",
             "dir": "",
-            "cmd": "/home/david/Development/chessbot/models/alphabeta",
+            "cmd": "/home/david/Development/chessbot/models/mvv",
             "args": "",
             "restart": false,
             "options": [],
@@ -130,16 +130,16 @@
         }
     ],
     "stats": {
-        "transposition vs alphabeta": {
-            "wins": 86,
-            "losses": 14,
-            "draws": 240,
-            "penta_WW": 12,
-            "penta_WD": 61,
-            "penta_WL": 1,
-            "penta_DD": 84,
-            "penta_LD": 11,
-            "penta_LL": 1
+        "quiesce vs mvv": {
+            "wins": 11,
+            "losses": 25,
+            "draws": 112,
+            "penta_WW": 0,
+            "penta_WD": 8,
+            "penta_WL": 3,
+            "penta_DD": 41,
+            "penta_LD": 22,
+            "penta_LL": 0
         }
     }
 }
