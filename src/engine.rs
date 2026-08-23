@@ -1,14 +1,11 @@
 use std::{
-    cmp::{max, min},
-    ops::Neg,
-    sync::{
+    cmp::{max, min}, ops::Neg, sync::{
         Arc,
         atomic::{AtomicBool, Ordering},
-    },
-    time::{Duration, Instant},
+    }, time::{Duration, Instant},
 };
 
-use cozy_chess::{Board, Color, GameStatus, Move, Piece::{self, Pawn}};
+use cozy_chess::{Board, Color, Move, Piece::{self, Pawn}};
 
 use crate::{
     evaluate::{eval, value}, transposition::{
@@ -157,6 +154,7 @@ fn time_budget_ms(board: &Board, limits: &SearchLimits) -> Option<u64> {
     Some(allocation.min(available).max(1))
 }
 
+
 #[derive(Clone, Copy)]
 struct EngineMove {
     mv: Move,
@@ -225,7 +223,7 @@ impl Engine {
         self.tt = Table::new_for_mb(megabytes);
     }
 
-    fn generate_moves(&self, board: &Board, tt_move: Option<Move>, non_captures: bool) -> Vec<EngineMove> {
+    fn generate_moves(&self, board: &Board, tt_move: Option<Move>) -> Vec<EngineMove> {
         let mut moves = Vec::with_capacity(64);
         let mut captures_len = 0;
 
@@ -241,7 +239,7 @@ impl Engine {
                 if emv.is_capture || emv.is_tt {
                     moves.insert(captures_len, emv);
                     captures_len += 1;
-                } else if non_captures {
+                } else {
                     moves.push(emv);
                 }
             }
@@ -259,50 +257,122 @@ impl Engine {
         return moves;
     }
 
-    // fn quiesce(
-    //     &mut self,
-    //     board: &Board,
-    //     mut bounds: SearchBounds,
-    //     context: &mut SearchContext,
-    // ) -> Option<i32> {
-    //     if context.should_stop() {
-    //         return None;
-    //     }
+    fn generate_qsearch_moves(&self, board: &Board, empty_flag: &mut bool) -> Vec<EngineMove> {
+        let mut moves = Vec::new();
+        let mut captures_len = 0;
 
-    //     let static_eval = eval(board);
-    //     if board.status() != GameStatus::Ongoing {
-    //         return Some(static_eval);
-    //     }
-    //     if static_eval >= bounds.beta {
-    //         return Some(static_eval);
-    //     }
-    //     if static_eval > bounds.alpha {
-    //         bounds.alpha = static_eval;
-    //     }
+        let enemy_pieces = board.colors(!board.side_to_move());
+        board.generate_moves(|mut moves_for_piece| {
+            if !moves_for_piece.is_empty() {
+                *empty_flag = false;
+            }
+            if moves_for_piece.piece != Pawn {
+                moves_for_piece.to &= enemy_pieces;
+            }
+            for mv in moves_for_piece {
+                if moves_for_piece.piece == Pawn && mv.to.file() == mv.from.file() && mv.promotion.is_none() {
+                    continue;
+                }
+                let emv = EngineMove::new(
+                    board,
+                    mv,
+                    moves_for_piece.piece,
+                    false,
+                );
 
-    //     let moves = self.generate_moves(board, None, false);
+                if emv.is_capture {
+                    moves.insert(captures_len, emv);
+                    captures_len += 1;
+                } else if emv.promotion {
+                    moves.push(emv);
+                }
+            }
+            false
+        });
 
-    //     let mut result = static_eval;
-    //     for mv in moves {
-    //         let mut next_board = board.clone();
-    //         next_board.play(mv);
+        moves[..captures_len].sort_by_key(|mv| {
+            value(mv.piece_type) - value(mv.target_type.unwrap())
+        });
 
-    //         let x = -self.quiesce(&next_board, -bounds, context)?;
+        return moves;
+    }
 
-    //         if x > result {
-    //             result = x;
-    //             if x > bounds.alpha {
-    //                 bounds.alpha = x;
-    //             }
-    //         }
+    fn quiesce(
+        &mut self,
+        board: &Board,
+        mut bounds: SearchBounds,
+        context: &mut SearchContext,
+    ) -> Option<i32> {
+        if context.should_stop() {
+            return None;
+        }
 
-    //         if x >= bounds.beta {
-    //             break;
-    //         }
-    //     }
+        if board.halfmove_clock() >= 100 {
+            if board.generate_moves(|_| true) {
+                return Some(0);
+            } else {
+                return Some(eval(board));
+            }
+        }
 
-    //     Some(result)
-    // }
+        let in_check = !board.checkers().is_empty();
+
+        let mut empty_flag = true;
+        let moves;
+        if in_check {
+            moves = self.generate_moves(board, None);
+            empty_flag = moves.is_empty();
+        } else {
+            moves = self.generate_qsearch_moves(board, &mut empty_flag);
+        }
+
+        if empty_flag {
+            return Some(eval(board));
+        }
+
+        
+        let static_eval = self.eval;
+        if !in_check {
+            if static_eval >= bounds.beta {
+                return Some(static_eval);
+            }
+            if static_eval > bounds.alpha {
+                bounds.alpha = static_eval;
+            }
+        }
+
+        let mut result;
+        if in_check {
+            result = -100_000;
+        } else {
+            result = self.eval;
+        }
+        for mv in moves {
+            let mut next_board = board.clone();
+            next_board.play_unchecked(mv.mv);
+
+            self.eval += mv.material_value;
+            self.eval = -self.eval;
+
+            let x = -self.quiesce(&next_board, -bounds, context)?;
+
+            self.eval = -self.eval;
+            self.eval -= mv.material_value;
+
+            if x > result {
+                result = x;
+                if x > bounds.alpha {
+                    bounds.alpha = x;
+                }
+            }
+
+            if x >= bounds.beta {
+                break;
+            }
+        }
+
+        Some(result)
+    }
 
     fn minimax(
         &mut self,
@@ -315,10 +385,6 @@ impl Engine {
             return None;
         }
 
-        // if depth <= 0 {
-        //     return self.quiesce(board, bounds, context);
-        // }
-
         if board.halfmove_clock() >= 100 {
             if board.generate_moves(|_| true) {
                 return Some(0);
@@ -328,11 +394,7 @@ impl Engine {
         }
 
         if depth <= 0 {
-            if board.generate_moves(|_| true) {
-                return Some(self.eval);
-            } else {
-                return Some(eval(board));
-            }
+            return self.quiesce(board, bounds, context);
         }
 
         let original_bounds = bounds;
@@ -357,8 +419,8 @@ impl Engine {
                 }
             }
         }
-
-        let moves = self.generate_moves(board, tt_move, true);
+        
+        let moves = self.generate_moves(board, tt_move);
 
         if moves.is_empty() {
             return Some(eval(board));
@@ -521,5 +583,128 @@ impl Engine {
         SearchResult {
             best_move: Some(completed_move.unwrap_or(fallback_move)),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use cozy_chess::Square;
+
+    fn board(fen: &str) -> Board {
+        Board::from_fen(fen, false).unwrap()
+    }
+
+    fn run_quiesce(board: &Board) -> (i32, u64) {
+        let mut engine = Engine {
+            tt: Table::new(1),
+            eval: eval(board),
+        };
+        let mut context = SearchContext::new(
+            board,
+            SearchLimits {
+                infinite: true,
+                ..SearchLimits::default()
+            },
+            Arc::new(AtomicBool::new(false)),
+        );
+        let score = engine
+            .quiesce(
+                board,
+                SearchBounds {
+                    alpha: -1_000_000_000,
+                    beta: 1_000_000_000,
+                },
+                &mut context,
+            )
+            .unwrap();
+
+        (score, context.nodes)
+    }
+
+    #[test]
+    fn qsearch_generates_captures_but_not_quiet_moves() {
+        let board = board("7k/8/8/8/8/8/p7/R6K w - - 0 1");
+        let engine = Engine::new();
+        let mut empty = true;
+        let moves = engine.generate_qsearch_moves(&board, &mut empty);
+
+        assert!(!empty);
+        assert_eq!(moves.len(), 1);
+        assert_eq!(
+            moves[0].mv,
+            Move {
+                from: Square::A1,
+                to: Square::A2,
+                promotion: None,
+            }
+        );
+        assert!(moves[0].is_capture);
+        assert_eq!(run_quiesce(&board).0, 500);
+    }
+
+    #[test]
+    fn qsearch_generates_en_passant() {
+        let board = board("7k/8/8/3pP3/8/8/8/7K w - d6 0 1");
+        let engine = Engine::new();
+        let mut empty = true;
+        let moves = engine.generate_qsearch_moves(&board, &mut empty);
+
+        assert!(!empty);
+        assert_eq!(moves.len(), 1);
+        assert_eq!(
+            moves[0].mv,
+            Move {
+                from: Square::E5,
+                to: Square::D6,
+                promotion: None,
+            }
+        );
+        assert!(moves[0].is_ep);
+    }
+
+    #[test]
+    fn qsearch_generates_all_quiet_promotions() {
+        let board = board("7k/P7/8/8/8/8/8/7K w - - 0 1");
+        let engine = Engine::new();
+        let mut empty = true;
+        let moves = engine.generate_qsearch_moves(&board, &mut empty);
+        let promotions: Vec<_> = moves.iter().map(|mv| mv.mv.promotion.unwrap()).collect();
+
+        assert!(!empty);
+        assert_eq!(moves.len(), 4);
+        assert!(moves.iter().all(|mv| {
+            mv.mv.from == Square::A7 && mv.mv.to == Square::A8 && mv.promotion
+        }));
+        assert_eq!(
+            promotions,
+            vec![Piece::Knight, Piece::Bishop, Piece::Rook, Piece::Queen]
+        );
+    }
+
+    #[test]
+    fn qsearch_searches_quiet_evasions_while_in_check() {
+        let board = board("k3r3/8/8/8/8/8/8/4K3 w - - 0 1");
+        let mut legal_moves = Vec::new();
+        board.generate_moves(|moves| {
+            legal_moves.extend(moves);
+            false
+        });
+
+        assert!(!board.checkers().is_empty());
+        assert!(legal_moves.iter().all(|mv| board.piece_on(mv.to).is_none()));
+
+        let (score, nodes) = run_quiesce(&board);
+        assert_eq!(score, -500);
+        assert_eq!(nodes, 1 + legal_moves.len() as u64);
+    }
+
+    #[test]
+    fn qsearch_scores_checkmate_and_stalemate() {
+        let checkmate = board("7k/6Q1/5K2/8/8/8/8/8 b - - 0 1");
+        let stalemate = board("7k/5K2/6Q1/8/8/8/8/8 b - - 0 1");
+
+        assert_eq!(run_quiesce(&checkmate).0, -100_000);
+        assert_eq!(run_quiesce(&stalemate).0, 0);
     }
 }
