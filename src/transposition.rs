@@ -42,6 +42,10 @@ impl Table {
         Self::new(size)
     }
 
+    pub fn clear(&mut self) {
+        self.table = vec![None; self.mask + 1];
+    }
+
     pub fn get(&self, key: u64) -> Option<TableEntry> {
         if let Some(entry) = self.table[(key as usize) & self.mask] {
             if entry.key == key { Some(entry) } else { None }

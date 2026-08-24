@@ -86,9 +86,11 @@ fn qsearch_generates_all_quiet_promotions() {
 
     assert!(!empty);
     assert_eq!(moves.len(), 4);
-    assert!(moves
-        .iter()
-        .all(|mv| { mv.mv.from == Square::A7 && mv.mv.to == Square::A8 && mv.promotion }));
+    assert!(
+        moves
+            .iter()
+            .all(|mv| { mv.mv.from == Square::A7 && mv.mv.to == Square::A8 && mv.promotion })
+    );
     assert_eq!(
         promotions,
         vec![Piece::Knight, Piece::Bishop, Piece::Rook, Piece::Queen]
@@ -213,10 +215,103 @@ fn a_new_search_resets_history() {
 
     engine.search(&request, |_| {});
 
-    assert!(engine
-        .history
-        .iter()
-        .flatten()
-        .flatten()
-        .all(|&value| value == 0));
+    assert!(
+        engine
+            .history
+            .iter()
+            .flatten()
+            .flatten()
+            .all(|&value| value == 0)
+    );
+}
+
+#[test]
+fn interrupted_pvs_probe_restores_search_state() {
+    let board = Board::default();
+    let mut engine = Engine::new();
+    engine.eval = eval(&board);
+    let initial_eval = engine.eval;
+    let initial_history = vec![board.hash()];
+    let mut context = SearchContext::new(
+        &board,
+        initial_history.clone(),
+        SearchLimits {
+            infinite: true,
+            ..SearchLimits::default()
+        },
+        Arc::new(AtomicBool::new(true)),
+    );
+    let mv = Move {
+        from: Square::E2,
+        to: Square::E4,
+        promotion: None,
+    };
+    let engine_move = EngineMove::new(&board, mv, Piece::Pawn, false);
+
+    let result = engine.search_move(
+        &board,
+        engine_move,
+        1,
+        1,
+        SearchBounds {
+            alpha: -100,
+            beta: 100,
+        },
+        false,
+        &mut context,
+    );
+
+    assert_eq!(result, None);
+    assert_eq!(engine.eval, initial_eval);
+    assert_eq!(context.history, initial_history);
+}
+
+#[test]
+fn root_pvs_matches_full_window_root_search() {
+    let board = board("r3k2r/p1ppqpb1/bn2pnp1/2pP4/1p2P3/2N2N2/PPQBBPPP/R3K2R w KQkq - 0 1");
+    let depth = 4;
+    let limits = SearchLimits {
+        infinite: true,
+        ..SearchLimits::default()
+    };
+
+    let mut pvs_engine = Engine::new();
+    let root_moves = pvs_engine.generate_moves(&board, None);
+    let mut pvs_context = SearchContext::new(
+        &board,
+        vec![board.hash()],
+        limits.clone(),
+        Arc::new(AtomicBool::new(false)),
+    );
+    let pvs_result = pvs_engine
+        .root_search(&board, depth, &root_moves, &mut pvs_context)
+        .unwrap();
+
+    let mut full_engine = Engine::new();
+    let full_moves = full_engine.generate_moves(&board, None);
+    let mut full_context = SearchContext::new(
+        &board,
+        vec![board.hash()],
+        limits,
+        Arc::new(AtomicBool::new(false)),
+    );
+    let mut bounds = SearchBounds {
+        alpha: -1_000_000_000,
+        beta: 1_000_000_000,
+    };
+    let mut full_result = None;
+    full_engine.eval = eval(&board);
+
+    for mv in full_moves.iter().copied() {
+        let score = full_engine
+            .search_move(&board, mv, depth - 1, 1, bounds, true, &mut full_context)
+            .unwrap();
+
+        if full_result.is_none_or(|(_, best_score)| score > best_score) {
+            full_result = Some((mv.mv, score));
+            bounds.alpha = score;
+        }
+    }
+
+    assert_eq!(pvs_result, full_result.unwrap());
 }

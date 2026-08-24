@@ -1,6 +1,13 @@
 use std::cmp::max;
 
-use cozy_chess::{Board, Color::{Black, White}, GameStatus, Piece::{self, *}, Rank, Square, get_bishop_moves, get_king_moves, get_knight_moves, get_pawn_attacks, get_rook_moves};
+use cozy_chess::{
+    Board,
+    Color::{Black, White},
+    GameStatus,
+    Piece::{self, *},
+    Rank, Square, get_bishop_moves, get_king_moves, get_knight_moves, get_pawn_attacks,
+    get_rook_moves,
+};
 
 use crate::engine::EngineMove;
 
@@ -54,20 +61,26 @@ pub fn static_exchange_evaluation(board: &Board, mv: &EngineMove) -> i16 {
         }
     }
 
-    let mut attacking_pieces = 
-        (get_king_moves(square) & board.pieces(King) & blocked_squares) |
-        (get_knight_moves(square) & board.pieces(Knight) & blocked_squares) |
-        (get_bishop_moves(square, blocked_squares) & blocked_squares & (board.pieces(Bishop) | board.pieces(Queen))) |
-        (get_rook_moves(square, blocked_squares) & blocked_squares & (board.pieces(Rook) | board.pieces(Queen))) |
-        (get_pawn_attacks(square, Black) & blocked_squares & board.colored_pieces(White, Pawn)) |
-        (get_pawn_attacks(square, White) & blocked_squares & board.colored_pieces(Black, Pawn))
-    ;
+    let mut attacking_pieces = (get_king_moves(square) & board.pieces(King) & blocked_squares)
+        | (get_knight_moves(square) & board.pieces(Knight) & blocked_squares)
+        | (get_bishop_moves(square, blocked_squares)
+            & blocked_squares
+            & (board.pieces(Bishop) | board.pieces(Queen)))
+        | (get_rook_moves(square, blocked_squares)
+            & blocked_squares
+            & (board.pieces(Rook) | board.pieces(Queen)))
+        | (get_pawn_attacks(square, Black) & blocked_squares & board.colored_pieces(White, Pawn))
+        | (get_pawn_attacks(square, White) & blocked_squares & board.colored_pieces(Black, Pawn));
 
     let mut gain: [i32; 32] = [0; 32];
     let mut d = 0;
-    
+
     gain[0] = mv.material_value;
-    piece = if mv.promotion {mv.mv.promotion} else {Some(mv.piece_type)};
+    piece = if mv.promotion {
+        mv.mv.promotion
+    } else {
+        Some(mv.piece_type)
+    };
 
     loop {
         let mut found = false;
@@ -82,37 +95,46 @@ pub fn static_exchange_evaluation(board: &Board, mv: &EngineMove) -> i16 {
             if let Some(sq) = ours.next_square() {
                 found = true;
 
-                d+=1; 
-                gain[d] = value(piece.unwrap()) - gain[d-1];
+                d += 1;
+                gain[d] = value(piece.unwrap()) - gain[d - 1];
 
                 blocked_squares ^= sq.bitboard();
                 attacking_pieces ^= sq.bitboard();
                 piece = Some(piece_type);
 
-                if piece_type == Pawn && ((colour == White && square.rank() == Rank::Eighth) || (colour == Black && square.rank() == Rank::First)) {
+                if piece_type == Pawn
+                    && ((colour == White && square.rank() == Rank::Eighth)
+                        || (colour == Black && square.rank() == Rank::First))
+                {
                     gain[d] += value(Queen) - value(Pawn);
                     piece = Some(Queen);
                 }
 
-
-
                 if matches!(piece_type, Rook | Queen) {
-                    attacking_pieces |= get_rook_moves(square, blocked_squares) & blocked_squares & (board.pieces(Rook) | board.pieces(Queen));
+                    attacking_pieces |= get_rook_moves(square, blocked_squares)
+                        & blocked_squares
+                        & (board.pieces(Rook) | board.pieces(Queen));
                 }
                 if matches!(piece_type, Pawn | Bishop | Queen) {
-                    attacking_pieces |= get_bishop_moves(square, blocked_squares) & blocked_squares & (board.pieces(Bishop) | board.pieces(Queen));
+                    attacking_pieces |= get_bishop_moves(square, blocked_squares)
+                        & blocked_squares
+                        & (board.pieces(Bishop) | board.pieces(Queen));
                 }
             }
 
-            if found {break;}
+            if found {
+                break;
+            }
         }
-        if !found {break;}
+        if !found {
+            break;
+        }
         colour = !colour;
     }
 
     while d > 0 {
         d -= 1;
-        gain[d] = -max(-gain[d], gain[d+1]);
+        gain[d] = -max(-gain[d], gain[d + 1]);
     }
     return gain[0] as i16;
 }

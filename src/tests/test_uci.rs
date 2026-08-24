@@ -23,7 +23,11 @@ fn parse_go_collects_multiple_limits() {
 fn parse_position_applies_the_complete_move_history() {
     let mut board = Board::default();
     let mut history = Vec::new();
-    parse_position("position startpos moves e2e4 e7e5", &mut board, &mut history);
+    parse_position(
+        "position startpos moves e2e4 e7e5",
+        &mut board,
+        &mut history,
+    );
 
     assert_eq!(board.side_to_move(), Color::White);
     assert_eq!(history.len(), 3);

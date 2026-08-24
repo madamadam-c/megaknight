@@ -89,6 +89,26 @@
     },
     "engines": [
         {
+            "name": "pvs",
+            "dir": "",
+            "cmd": "/home/david/Development/chessbot/models/pvs",
+            "args": "",
+            "restart": false,
+            "options": [],
+            "limit": {
+                "tc": {
+                    "increment": 80,
+                    "fixed_time": 0,
+                    "time": 8000,
+                    "moves": 0,
+                    "timemargin": 0
+                },
+                "nodes": 0,
+                "plies": 0
+            },
+            "variant": 0
+        },
+        {
             "name": "history",
             "dir": "",
             "cmd": "/home/david/Development/chessbot/models/history",
@@ -107,39 +127,19 @@
                 "plies": 0
             },
             "variant": 0
-        },
-        {
-            "name": "see",
-            "dir": "",
-            "cmd": "/home/david/Development/chessbot/models/see",
-            "args": "",
-            "restart": false,
-            "options": [],
-            "limit": {
-                "tc": {
-                    "increment": 80,
-                    "fixed_time": 0,
-                    "time": 8000,
-                    "moves": 0,
-                    "timemargin": 0
-                },
-                "nodes": 0,
-                "plies": 0
-            },
-            "variant": 0
         }
     ],
     "stats": {
-        "history vs see": {
-            "wins": 170,
-            "losses": 81,
-            "draws": 191,
-            "penta_WW": 30,
-            "penta_WD": 83,
-            "penta_WL": 27,
-            "penta_DD": 37,
-            "penta_LD": 34,
-            "penta_LL": 10
+        "pvs vs history": {
+            "wins": 102,
+            "losses": 82,
+            "draws": 136,
+            "penta_WW": 16,
+            "penta_WD": 31,
+            "penta_WL": 39,
+            "penta_DD": 38,
+            "penta_LD": 29,
+            "penta_LL": 7
         }
     }
 }

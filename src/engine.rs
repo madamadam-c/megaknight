@@ -1,14 +1,23 @@
 use std::{
-    cmp::{max, min}, ops::Neg, sync::{
+    cmp::{max, min},
+    ops::Neg,
+    sync::{
         Arc,
         atomic::{AtomicBool, Ordering},
-    }, time::{Duration, Instant},
+    },
+    time::{Duration, Instant},
 };
 
-use cozy_chess::{Board, Color::{self, White}, Move, Piece::{self, Pawn}};
+use cozy_chess::{
+    Board,
+    Color::{self, White},
+    Move,
+    Piece::{self, Pawn},
+};
 
 use crate::{
-    evaluate::{eval, static_exchange_evaluation, value}, transposition::{
+    evaluate::{eval, static_exchange_evaluation, value},
+    transposition::{
         NodeType::{EXACT, LOWER, UPPER},
         Table, TableEntry,
     },
@@ -64,12 +73,7 @@ struct SearchBounds {
 }
 
 impl SearchContext {
-    fn new(
-        board: &Board,
-        history: Vec<u64>,
-        limits: SearchLimits,
-        stop: Arc<AtomicBool>,
-    ) -> Self {
+    fn new(board: &Board, history: Vec<u64>, limits: SearchLimits, stop: Arc<AtomicBool>) -> Self {
         let start = Instant::now();
         let (soft_deadline, hard_deadline) = time_deadlines(board, &limits, start);
 
@@ -207,7 +211,6 @@ fn time_budget_ms(board: &Board, limits: &SearchLimits) -> Option<u64> {
     Some(allocation.min(available).max(1))
 }
 
-
 #[derive(Clone, Copy)]
 pub struct EngineMove {
     pub mv: Move,
@@ -215,10 +218,10 @@ pub struct EngineMove {
     pub see_score: i16,
     pub is_capture: bool,
     pub is_ep: bool,
-    pub is_tt: bool, 
+    pub is_tt: bool,
     pub promotion: bool,
     pub piece_type: Piece,
-    pub target_type: Option<Piece>
+    pub target_type: Option<Piece>,
 }
 
 impl EngineMove {
@@ -235,16 +238,23 @@ impl EngineMove {
             promotion = true;
         }
 
-        if board.en_passant().is_some() && piece == Pawn && mv.from.file() != mv.to.file() && board.piece_on(mv.to).is_none() {
+        if board.en_passant().is_some()
+            && piece == Pawn
+            && mv.from.file() != mv.to.file()
+            && board.piece_on(mv.to).is_none()
+        {
             material_value += value(Pawn);
-            capture = true; ep = true;
+            capture = true;
+            ep = true;
             target_type = Some(Pawn);
-        } else if let Some(target) = board.piece_on(mv.to) && board.color_on(mv.to) != board.color_on(mv.from) {
+        } else if let Some(target) = board.piece_on(mv.to)
+            && board.color_on(mv.to) != board.color_on(mv.from)
+        {
             material_value += value(target);
             capture = true;
             target_type = Some(target);
         }
-        
+
         Self {
             mv: mv,
             material_value: material_value,
@@ -254,7 +264,7 @@ impl EngineMove {
             is_tt: is_tt,
             promotion: promotion,
             piece_type: piece,
-            target_type: target_type
+            target_type: target_type,
         }
     }
 }
@@ -270,17 +280,19 @@ impl MoveList {
     pub fn new(qsearch: bool) -> Self {
         let g = Vec::new();
         let b = Vec::new();
-        let q = Vec::with_capacity(if qsearch {0} else {64});
+        let q = Vec::with_capacity(if qsearch { 0 } else { 64 });
 
         Self {
             good_captures: g,
             bad_captures: b,
-            quiets: q
+            quiets: q,
         }
     }
 
     pub fn is_empty(&self) -> bool {
-        return self.good_captures.is_empty() && self.bad_captures.is_empty() && self.quiets.is_empty();
+        return self.good_captures.is_empty()
+            && self.bad_captures.is_empty()
+            && self.quiets.is_empty();
     }
 
     pub fn len(&self) -> usize {
@@ -298,18 +310,12 @@ impl MoveList {
 impl IntoIterator for MoveList {
     type Item = EngineMove;
 
-    type IntoIter = std::iter::Flatten<
-        std::array::IntoIter<Vec<EngineMove>, 3>,
-    >;
+    type IntoIter = std::iter::Flatten<std::array::IntoIter<Vec<EngineMove>, 3>>;
 
     fn into_iter(self) -> Self::IntoIter {
-        [
-            self.good_captures,
-            self.quiets,
-            self.bad_captures,
-        ]
-        .into_iter()
-        .flatten()
+        [self.good_captures, self.quiets, self.bad_captures]
+            .into_iter()
+            .flatten()
     }
 }
 
@@ -353,7 +359,7 @@ impl Engine {
         Self {
             tt: Table::new_for_mb(16),
             eval: 0,
-            history: [[[0; 64]; 64]; 2]
+            history: [[[0; 64]; 64]; 2],
         }
     }
 
@@ -368,12 +374,8 @@ impl Engine {
 
         board.generate_moves(|moves_for_piece| {
             for mv in moves_for_piece {
-                let mut emv = EngineMove::new(
-                    board,
-                    mv,
-                    moves_for_piece.piece,
-                    tt_move == Some(mv),
-                );
+                let mut emv =
+                    EngineMove::new(board, mv, moves_for_piece.piece, tt_move == Some(mv));
 
                 if emv.is_capture {
                     emv.see_score = static_exchange_evaluation(board, &emv);
@@ -405,13 +407,12 @@ impl Engine {
             if mv.promotion {
                 -mv.material_value - MAX_HISTORY
             } else {
-                -self.history[if board.side_to_move() == White {0} else {1}][mv.mv.from as usize][mv.mv.to as usize]
+                -self.history[if board.side_to_move() == White { 0 } else { 1 }]
+                    [mv.mv.from as usize][mv.mv.to as usize]
             }
         });
 
-        moves.bad_captures.sort_unstable_by_key(|mv| {
-            -mv.see_score
-        });
+        moves.bad_captures.sort_unstable_by_key(|mv| -mv.see_score);
 
         return moves;
     }
@@ -428,15 +429,13 @@ impl Engine {
                 moves_for_piece.to &= enemy_pieces;
             }
             for mv in moves_for_piece {
-                if moves_for_piece.piece == Pawn && mv.to.file() == mv.from.file() && mv.promotion.is_none() {
+                if moves_for_piece.piece == Pawn
+                    && mv.to.file() == mv.from.file()
+                    && mv.promotion.is_none()
+                {
                     continue;
                 }
-                let mut emv = EngineMove::new(
-                    board,
-                    mv,
-                    moves_for_piece.piece,
-                    false,
-                );
+                let mut emv = EngineMove::new(board, mv, moves_for_piece.piece, false);
 
                 if emv.is_capture {
                     emv.see_score = static_exchange_evaluation(board, &emv);
@@ -445,7 +444,6 @@ impl Engine {
                     } else {
                         moves.bad_captures.push(emv);
                     }
-                    
                 } else if emv.promotion {
                     moves.quiets.push(emv);
                 }
@@ -458,9 +456,7 @@ impl Engine {
             -mv.see_score
         });
 
-        moves.bad_captures.sort_unstable_by_key(|mv| {
-            -mv.see_score
-        });
+        moves.bad_captures.sort_unstable_by_key(|mv| -mv.see_score);
 
         return moves;
     }
@@ -553,6 +549,46 @@ impl Engine {
         Some(result)
     }
 
+    fn search_move(
+        &mut self,
+        board: &Board,
+        mv: EngineMove,
+        depth: i32,
+        ply: i32,
+        bounds: SearchBounds,
+        first_move: bool,
+        context: &mut SearchContext,
+    ) -> Option<i32> {
+        let mut next_board = board.clone();
+        next_board.play_unchecked(mv.mv);
+
+        self.eval += mv.material_value;
+        self.eval = -self.eval;
+
+        context.history.push(next_board.hash());
+        let child = if first_move {
+            self.minimax(&next_board, depth, ply, -bounds, context)
+        } else {
+            let null_bounds = SearchBounds {
+                alpha: bounds.alpha,
+                beta: bounds.alpha + 1,
+            };
+
+            match self.minimax(&next_board, depth, ply, -null_bounds, context) {
+                Some(score) if -score > bounds.alpha && -score < bounds.beta => {
+                    self.minimax(&next_board, depth, ply, -bounds, context)
+                }
+                child => child,
+            }
+        };
+        context.history.pop();
+
+        self.eval = -self.eval;
+        self.eval -= mv.material_value;
+
+        child.map(|score| -score)
+    }
+
     fn minimax(
         &mut self,
         board: &Board,
@@ -561,10 +597,6 @@ impl Engine {
         mut bounds: SearchBounds,
         context: &mut SearchContext,
     ) -> Option<i32> {
-        if context.should_stop() {
-            return None;
-        }
-
         if is_repetition(board, &context.history) {
             return Some(0);
         }
@@ -579,6 +611,10 @@ impl Engine {
 
         if depth <= 0 {
             return self.quiesce(board, ply, bounds, context);
+        }
+
+        if context.should_stop() {
+            return None;
         }
 
         let original_bounds = bounds;
@@ -604,7 +640,7 @@ impl Engine {
                 }
             }
         }
-        
+
         let moves = self.generate_moves(board, tt_move);
 
         if moves.is_empty() {
@@ -613,21 +649,10 @@ impl Engine {
 
         let mut result = -1_000_000_000;
         let mut best = moves[0];
+        let mut first_move = true;
+
         for mv in moves.iter().copied() {
-            let mut next_board = board.clone();
-            next_board.play_unchecked(mv.mv);
-
-            self.eval += mv.material_value;
-            self.eval = -self.eval;
-            
-            context.history.push(next_board.hash());
-            let child = self.minimax(&next_board, depth - 1, ply + 1, -bounds, context);
-            context.history.pop();
-
-            self.eval = -self.eval;
-            self.eval -= mv.material_value;
-
-            let x = -child?;
+            let x = self.search_move(board, mv, depth - 1, ply + 1, bounds, first_move, context)?;
 
             if x > result {
                 result = x;
@@ -639,17 +664,30 @@ impl Engine {
 
             if x >= bounds.beta {
                 if !mv.is_capture && !mv.promotion {
-                    update_history(&mut self.history[if board.side_to_move() == White {0} else {1}][mv.mv.from as usize][mv.mv.to as usize], history_bonus(depth));
+                    update_history(
+                        &mut self.history[if board.side_to_move() == White { 0 } else { 1 }]
+                            [mv.mv.from as usize][mv.mv.to as usize],
+                        history_bonus(depth),
+                    );
                     for mv2 in moves.iter().copied() {
                         if mv2.mv == mv.mv {
                             break;
                         }
-                        update_history(&mut self.history[if board.side_to_move() == White {0} else {1}][mv2.mv.from as usize][mv2.mv.to as usize], 
-                            -history_bonus(depth)/3);
+
+                        if !mv2.is_capture && !mv2.promotion {
+                            update_history(
+                                &mut self.history
+                                    [if board.side_to_move() == White { 0 } else { 1 }]
+                                    [mv2.mv.from as usize][mv2.mv.to as usize],
+                                -history_bonus(depth) / 4,
+                            );
+                        }
                     }
                 }
                 break;
             }
+
+            first_move = false;
         }
 
         let node_type = {
@@ -679,7 +717,7 @@ impl Engine {
         &mut self,
         board: &Board,
         depth: i32,
-        root_moves: MoveList,
+        root_moves: &MoveList,
         context: &mut SearchContext,
     ) -> Option<(Move, i32)> {
         let mut best_move = None;
@@ -690,25 +728,9 @@ impl Engine {
         };
 
         self.eval = eval(board);
-        for mv in root_moves {
-            if context.should_stop() {
-                return None;
-            }
-
-            let mut next_board = board.clone();
-            next_board.play_unchecked(mv.mv);
-
-            self.eval += mv.material_value;
-            self.eval = -self.eval;
-
-            context.history.push(next_board.hash());
-            let child = self.minimax(&next_board, depth - 1, 1, -bounds, context);
-            context.history.pop();
-
-            self.eval = -self.eval;
-            self.eval -= mv.material_value;
-
-            let score = -child?;
+        let mut first_move = true;
+        for mv in root_moves.iter().copied() {
+            let score = self.search_move(board, mv, depth - 1, 1, bounds, first_move, context)?;
 
             if score > best_score {
                 best_score = score;
@@ -721,6 +743,8 @@ impl Engine {
             if score >= bounds.beta {
                 break;
             }
+
+            first_move = false;
         }
 
         best_move.map(|mv| (mv.mv, best_score))
@@ -732,7 +756,8 @@ impl Engine {
     {
         let mut root_moves = self.generate_moves(&request.board, None);
 
-        self.history = [[[0; 64] ; 64] ; 2];
+        self.history = [[[0; 64]; 64]; 2];
+        self.tt.clear();
 
         if root_moves.is_empty() {
             return SearchResult { best_move: None };
@@ -756,13 +781,19 @@ impl Engine {
 
             root_moves = self.generate_moves(&request.board, completed_move);
             if !request.limits.searchmoves.is_empty() {
-                root_moves.good_captures.retain(|mv| request.limits.searchmoves.contains(&mv.mv));
-                root_moves.bad_captures.retain(|mv| request.limits.searchmoves.contains(&mv.mv));
-                root_moves.quiets.retain(|mv| request.limits.searchmoves.contains(&mv.mv));
+                root_moves
+                    .good_captures
+                    .retain(|mv| request.limits.searchmoves.contains(&mv.mv));
+                root_moves
+                    .bad_captures
+                    .retain(|mv| request.limits.searchmoves.contains(&mv.mv));
+                root_moves
+                    .quiets
+                    .retain(|mv| request.limits.searchmoves.contains(&mv.mv));
             }
 
             let Some((best_move, score)) =
-                self.root_search(&request.board, depth, root_moves.clone(), &mut context)
+                self.root_search(&request.board, depth, &root_moves, &mut context)
             else {
                 break;
             };

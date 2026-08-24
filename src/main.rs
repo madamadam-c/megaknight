@@ -6,7 +6,6 @@ use std::{
         mpsc,
     },
     thread::{self, JoinHandle},
-    time::Duration,
 };
 
 use cozy_chess::{
@@ -16,6 +15,7 @@ use cozy_chess::{
 
 use crate::engine::{Engine, SearchInfo, SearchLimits, SearchRequest, SearchResult};
 
+mod bulk;
 mod engine;
 mod evaluate;
 mod transposition;
@@ -41,6 +41,12 @@ enum WorkerOutput {
         board: Board,
         result: SearchResult,
     },
+}
+
+enum MainEvent {
+    Input(String),
+    InputClosed,
+    Worker(WorkerOutput),
 }
 
 fn parse_position(line: &str, board: &mut Board, history: &mut Vec<u64>) {
@@ -203,26 +209,39 @@ fn print_best_move(
     }
 }
 
-fn spawn_input_reader() -> (mpsc::Receiver<String>, JoinHandle<()>) {
-    let (input_tx, input_rx) = mpsc::channel::<String>();
+fn spawn_input_reader(event_tx: mpsc::Sender<MainEvent>) -> JoinHandle<()> {
     let input_handle = thread::spawn(move || {
         for line in io::stdin().lock().lines() {
             let Ok(line) = line else {
                 break;
             };
-            if input_tx.send(line).is_err() {
+            if event_tx.send(MainEvent::Input(line)).is_err() {
                 break;
             }
         }
+
+        let _ = event_tx.send(MainEvent::InputClosed);
     });
 
-    (input_rx, input_handle)
+    input_handle
 }
 
 fn main() {
-    let (input_rx, _input_handle) = spawn_input_reader();
+    if std::env::args().nth(1).as_deref() == Some("bulk-eval") {
+        if let Err(error) = bulk::run_from_env() {
+            eprintln!("bulk-eval failed: {error}");
+            std::process::exit(1);
+        }
+        return;
+    }
+
+    run_uci();
+}
+
+fn run_uci() {
+    let (event_tx, event_rx) = mpsc::channel::<MainEvent>();
+    let _input_handle = spawn_input_reader(event_tx.clone());
     let (command_tx, command_rx) = mpsc::channel::<Command>();
-    let (output_tx, output_rx) = mpsc::channel::<WorkerOutput>();
 
     let worker_handle = thread::spawn(move || {
         let mut engine = Engine::new();
@@ -230,20 +249,20 @@ fn main() {
         while let Ok(command) = command_rx.recv() {
             match command {
                 Command::Go { id, request } => {
-                    let output_tx_for_info = &output_tx;
+                    let event_tx_for_info = &event_tx;
                     let search_board = request.board.clone();
                     let result = engine.search(&request, |info| {
-                        let _ = output_tx_for_info.send(WorkerOutput::Info {
+                        let _ = event_tx_for_info.send(MainEvent::Worker(WorkerOutput::Info {
                             id,
                             board: search_board.clone(),
                             info,
-                        });
+                        }));
                     });
-                    let _ = output_tx.send(WorkerOutput::BestMove {
+                    let _ = event_tx.send(MainEvent::Worker(WorkerOutput::BestMove {
                         id,
                         board: search_board,
                         result,
-                    });
+                    }));
                 }
                 Command::SetHash(megabytes) => engine.set_hash_size_mb(megabytes),
                 Command::NewGame => engine.new_game(),
@@ -259,21 +278,26 @@ fn main() {
     let mut quitting = false;
 
     while !quitting {
-        while let Ok(output) = output_rx.try_recv() {
-            match output {
-                WorkerOutput::Info { id, board, info } => {
-                    print_info(id, active_search.as_ref().map(|(id, _)| *id), &board, info);
+        let line = match event_rx.recv() {
+            Ok(MainEvent::Worker(output)) => {
+                match output {
+                    WorkerOutput::Info { id, board, info } => {
+                        print_info(id, active_search.as_ref().map(|(id, _)| *id), &board, info);
+                    }
+                    WorkerOutput::BestMove { id, board, result } => {
+                        print_best_move(id, &mut active_search, &board, result);
+                    }
                 }
-                WorkerOutput::BestMove { id, board, result } => {
-                    print_best_move(id, &mut active_search, &board, result);
-                }
+                continue;
             }
-        }
-
-        let line = match input_rx.recv_timeout(Duration::from_millis(10)) {
-            Ok(line) => line,
-            Err(mpsc::RecvTimeoutError::Timeout) => continue,
-            Err(mpsc::RecvTimeoutError::Disconnected) => break,
+            Ok(MainEvent::Input(line)) => line,
+            Ok(MainEvent::InputClosed) | Err(_) => {
+                if let Some((_, stop)) = &active_search {
+                    stop.store(true, Ordering::Relaxed);
+                }
+                let _ = command_tx.send(Command::Quit);
+                break;
+            }
         };
         let command = line.split_whitespace().next();
 
