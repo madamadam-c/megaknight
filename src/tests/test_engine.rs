@@ -9,6 +9,7 @@ fn run_quiesce(board: &Board) -> (i32, u64) {
     let mut engine = Engine {
         tt: Table::new(1),
         eval: eval(board),
+        history: [[[0; 64]; 64]; 2],
     };
     let mut context = SearchContext::new(
         board,
@@ -85,9 +86,9 @@ fn qsearch_generates_all_quiet_promotions() {
 
     assert!(!empty);
     assert_eq!(moves.len(), 4);
-    assert!(moves.iter().all(|mv| {
-        mv.mv.from == Square::A7 && mv.mv.to == Square::A8 && mv.promotion
-    }));
+    assert!(moves
+        .iter()
+        .all(|mv| { mv.mv.from == Square::A7 && mv.mv.to == Square::A8 && mv.promotion }));
     assert_eq!(
         promotions,
         vec![Piece::Knight, Piece::Bishop, Piece::Rook, Piece::Queen]
@@ -138,4 +139,84 @@ fn repetition_requires_three_matching_positions() {
 
     assert!(!is_repetition(&board, &[key, key]));
     assert!(is_repetition(&board, &[key, key, key]));
+}
+
+#[test]
+fn history_bonus_scales_with_depth_without_an_early_cap() {
+    assert_eq!(history_bonus(1), 1);
+    assert_eq!(history_bonus(8), 64);
+    assert_eq!(history_bonus(16), 256);
+    assert!(history_bonus(16) > history_bonus(8));
+    assert_eq!(history_bonus(i32::MAX), i32::MAX);
+}
+
+#[test]
+fn history_update_applies_gravity_and_stays_bounded() {
+    let mut value = 0;
+    update_history(&mut value, MAX_HISTORY / 2);
+    assert_eq!(value, MAX_HISTORY / 2);
+
+    update_history(&mut value, MAX_HISTORY / 2);
+    assert_eq!(value, MAX_HISTORY * 3 / 4);
+
+    update_history(&mut value, i32::MAX);
+    assert_eq!(value, MAX_HISTORY);
+
+    let mut negative = 0;
+    update_history(&mut negative, i32::MIN);
+    assert_eq!(negative, -MAX_HISTORY);
+}
+
+#[test]
+fn history_orders_quiets_for_the_side_to_move() {
+    let board = Board::default();
+    let mut engine = Engine::new();
+    let preferred = Move {
+        from: Square::E2,
+        to: Square::E4,
+        promotion: None,
+    };
+
+    engine.history[0][Square::E2 as usize][Square::E4 as usize] = 1;
+    engine.history[1][Square::D2 as usize][Square::D4 as usize] = MAX_HISTORY;
+
+    let moves = engine.generate_moves(&board, None);
+    assert_eq!(moves.quiets[0].mv, preferred);
+}
+
+#[test]
+fn quiet_promotions_are_ordered_before_maximum_history_quiets() {
+    let board = board("7k/P7/8/8/8/8/8/7K w - - 0 1");
+    let mut engine = Engine::new();
+    engine.history[0] = [[MAX_HISTORY; 64]; 64];
+
+    let moves = engine.generate_moves(&board, None);
+    assert!(moves.quiets[..4].iter().all(|mv| mv.promotion));
+    assert_eq!(moves.quiets[0].mv.promotion, Some(Piece::Queen));
+    assert!(moves.quiets[4..].iter().all(|mv| !mv.promotion));
+}
+
+#[test]
+fn a_new_search_resets_history() {
+    let board = Board::default();
+    let mut engine = Engine::new();
+    engine.history = [[[123; 64]; 64]; 2];
+    let request = SearchRequest {
+        history: vec![board.hash()],
+        board,
+        limits: SearchLimits {
+            depth: Some(1),
+            ..SearchLimits::default()
+        },
+        stop: Arc::new(AtomicBool::new(false)),
+    };
+
+    engine.search(&request, |_| {});
+
+    assert!(engine
+        .history
+        .iter()
+        .flatten()
+        .flatten()
+        .all(|&value| value == 0));
 }

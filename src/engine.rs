@@ -5,7 +5,7 @@ use std::{
     }, time::{Duration, Instant},
 };
 
-use cozy_chess::{Board, Color, Move, Piece::{self, Pawn}};
+use cozy_chess::{Board, Color::{self, White}, Move, Piece::{self, Pawn}};
 
 use crate::{
     evaluate::{eval, static_exchange_evaluation, value}, transposition::{
@@ -258,7 +258,7 @@ impl EngineMove {
         }
     }
 }
-
+#[derive(Clone)]
 struct MoveList {
     pub good_captures: Vec<EngineMove>,
     pub bad_captures: Vec<EngineMove>,
@@ -332,9 +332,20 @@ impl std::ops::Index<usize> for MoveList {
     }
 }
 
+const MAX_HISTORY: i32 = 16_384;
+fn update_history(value: &mut i32, bonus: i32) {
+    let bonus = bonus.clamp(-MAX_HISTORY, MAX_HISTORY);
+    *value += bonus - *value * bonus.abs() / MAX_HISTORY;
+}
+
+fn history_bonus(depth: i32) -> i32 {
+    depth.saturating_mul(depth)
+}
+
 pub struct Engine {
     tt: Table,
     eval: i32,
+    history: [[[i32; 64]; 64]; 2],
 }
 
 impl Engine {
@@ -342,6 +353,7 @@ impl Engine {
         Self {
             tt: Table::new_for_mb(16),
             eval: 0,
+            history: [[[0; 64]; 64]; 2]
         }
     }
 
@@ -386,6 +398,14 @@ impl Engine {
             } else {
                 // value(mv.piece_type) - value(mv.target_type.unwrap())
                 -mv.see_score as i32
+            }
+        });
+
+        moves.quiets.sort_unstable_by_key(|mv| {
+            if mv.promotion {
+                -mv.material_value - MAX_HISTORY
+            } else {
+                -self.history[if board.side_to_move() == White {0} else {1}][mv.mv.from as usize][mv.mv.to as usize]
             }
         });
 
@@ -593,7 +613,7 @@ impl Engine {
 
         let mut result = -1_000_000_000;
         let mut best = moves[0];
-        for mv in moves {
+        for mv in moves.iter().copied() {
             let mut next_board = board.clone();
             next_board.play_unchecked(mv.mv);
 
@@ -618,6 +638,16 @@ impl Engine {
             }
 
             if x >= bounds.beta {
+                if !mv.is_capture && !mv.promotion {
+                    update_history(&mut self.history[if board.side_to_move() == White {0} else {1}][mv.mv.from as usize][mv.mv.to as usize], history_bonus(depth));
+                    for mv2 in moves.iter().copied() {
+                        if mv2.mv == mv.mv {
+                            break;
+                        }
+                        update_history(&mut self.history[if board.side_to_move() == White {0} else {1}][mv2.mv.from as usize][mv2.mv.to as usize], 
+                            -history_bonus(depth)/3);
+                    }
+                }
                 break;
             }
         }
@@ -649,7 +679,7 @@ impl Engine {
         &mut self,
         board: &Board,
         depth: i32,
-        root_moves: &[Move],
+        root_moves: MoveList,
         context: &mut SearchContext,
     ) -> Option<(Move, i32)> {
         let mut best_move = None;
@@ -660,8 +690,7 @@ impl Engine {
         };
 
         self.eval = eval(board);
-        for &emv in root_moves {
-            let mv = EngineMove::new(board, emv, board.piece_on(emv.from).unwrap(), false);
+        for mv in root_moves {
             if context.should_stop() {
                 return None;
             }
@@ -701,15 +730,9 @@ impl Engine {
     where
         F: FnMut(SearchInfo),
     {
-        let mut root_moves = Vec::new();
-        request.board.generate_moves(|moves_for_piece| {
-            root_moves.extend(moves_for_piece);
-            false
-        });
+        let mut root_moves = self.generate_moves(&request.board, None);
 
-        if !request.limits.searchmoves.is_empty() {
-            root_moves.retain(|mv| request.limits.searchmoves.contains(mv));
-        }
+        self.history = [[[0; 64] ; 64] ; 2];
 
         if root_moves.is_empty() {
             return SearchResult { best_move: None };
@@ -731,8 +754,15 @@ impl Engine {
                 break;
             }
 
+            root_moves = self.generate_moves(&request.board, completed_move);
+            if !request.limits.searchmoves.is_empty() {
+                root_moves.good_captures.retain(|mv| request.limits.searchmoves.contains(&mv.mv));
+                root_moves.bad_captures.retain(|mv| request.limits.searchmoves.contains(&mv.mv));
+                root_moves.quiets.retain(|mv| request.limits.searchmoves.contains(&mv.mv));
+            }
+
             let Some((best_move, score)) =
-                self.root_search(&request.board, depth, &root_moves, &mut context)
+                self.root_search(&request.board, depth, root_moves.clone(), &mut context)
             else {
                 break;
             };
@@ -755,7 +785,7 @@ impl Engine {
         }
 
         SearchResult {
-            best_move: Some(completed_move.unwrap_or(fallback_move)),
+            best_move: Some(completed_move.unwrap_or(fallback_move.mv)),
         }
     }
 }

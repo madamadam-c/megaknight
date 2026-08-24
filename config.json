@@ -89,9 +89,9 @@
     },
     "engines": [
         {
-            "name": "seeprune",
+            "name": "history",
             "dir": "",
-            "cmd": "/home/david/Development/chessbot/models/seeprune",
+            "cmd": "/home/david/Development/chessbot/models/history",
             "args": "",
             "restart": false,
             "options": [],
@@ -130,16 +130,16 @@
         }
     ],
     "stats": {
-        "seeprune vs see": {
-            "wins": 46,
-            "losses": 42,
-            "draws": 52,
-            "penta_WW": 3,
-            "penta_WD": 16,
-            "penta_WL": 24,
-            "penta_DD": 13,
-            "penta_LD": 10,
-            "penta_LL": 4
+        "history vs see": {
+            "wins": 170,
+            "losses": 81,
+            "draws": 191,
+            "penta_WW": 30,
+            "penta_WD": 83,
+            "penta_WL": 27,
+            "penta_DD": 37,
+            "penta_LD": 34,
+            "penta_LL": 10
         }
     }
 }
