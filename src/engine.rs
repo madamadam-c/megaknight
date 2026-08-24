@@ -8,7 +8,7 @@ use std::{
 use cozy_chess::{Board, Color, Move, Piece::{self, Pawn}};
 
 use crate::{
-    evaluate::{eval, value}, transposition::{
+    evaluate::{eval, static_exchange_evaluation, value}, transposition::{
         NodeType::{EXACT, LOWER, UPPER},
         Table, TableEntry,
     },
@@ -30,6 +30,7 @@ pub struct SearchLimits {
 
 pub struct SearchRequest {
     pub board: Board,
+    pub history: Vec<u64>,
     pub limits: SearchLimits,
     pub stop: Arc<AtomicBool>,
 }
@@ -49,6 +50,7 @@ pub struct SearchResult {
 struct SearchContext {
     limits: SearchLimits,
     stop: Arc<AtomicBool>,
+    history: Vec<u64>,
     start: Instant,
     soft_deadline: Option<Instant>,
     hard_deadline: Option<Instant>,
@@ -62,13 +64,19 @@ struct SearchBounds {
 }
 
 impl SearchContext {
-    fn new(board: &Board, limits: SearchLimits, stop: Arc<AtomicBool>) -> Self {
+    fn new(
+        board: &Board,
+        history: Vec<u64>,
+        limits: SearchLimits,
+        stop: Arc<AtomicBool>,
+    ) -> Self {
         let start = Instant::now();
         let (soft_deadline, hard_deadline) = time_deadlines(board, &limits, start);
 
         Self {
             limits,
             stop,
+            history,
             start,
             soft_deadline,
             hard_deadline,
@@ -103,6 +111,51 @@ impl SearchContext {
 
     fn elapsed(&self) -> Duration {
         self.start.elapsed()
+    }
+}
+
+const MATE_SCORE: i32 = 100_000;
+const MATE_THRESHOLD: i32 = 99_000;
+
+fn score_to_tt(score: i32, ply: i32) -> i32 {
+    if score >= MATE_THRESHOLD {
+        score + ply
+    } else if score <= -MATE_THRESHOLD {
+        score - ply
+    } else {
+        score
+    }
+}
+
+fn score_from_tt(score: i32, ply: i32) -> i32 {
+    if score >= MATE_THRESHOLD {
+        score - ply
+    } else if score <= -MATE_THRESHOLD {
+        score + ply
+    } else {
+        score
+    }
+}
+
+fn is_repetition(board: &Board, history: &[u64]) -> bool {
+    let key = board.hash();
+    let reversible_positions = board.halfmove_clock() as usize + 1;
+
+    history
+        .iter()
+        .rev()
+        .take(reversible_positions)
+        .filter(|&&previous| previous == key)
+        .take(3)
+        .count()
+        >= 3
+}
+
+fn terminal_score(board: &Board, ply: i32) -> i32 {
+    if board.checkers().is_empty() {
+        0
+    } else {
+        -MATE_SCORE + ply
     }
 }
 
@@ -156,15 +209,16 @@ fn time_budget_ms(board: &Board, limits: &SearchLimits) -> Option<u64> {
 
 
 #[derive(Clone, Copy)]
-struct EngineMove {
-    mv: Move,
-    material_value: i32,
-    is_capture: bool,
-    is_ep: bool,
-    is_tt: bool, 
-    promotion: bool,
-    piece_type: Piece,
-    target_type: Option<Piece>
+pub struct EngineMove {
+    pub mv: Move,
+    pub material_value: i32,
+    pub see_score: i16,
+    pub is_capture: bool,
+    pub is_ep: bool,
+    pub is_tt: bool, 
+    pub promotion: bool,
+    pub piece_type: Piece,
+    pub target_type: Option<Piece>
 }
 
 impl EngineMove {
@@ -194,6 +248,7 @@ impl EngineMove {
         Self {
             mv: mv,
             material_value: material_value,
+            see_score: 0,
             is_capture: capture,
             is_ep: ep,
             is_tt: is_tt,
@@ -201,6 +256,79 @@ impl EngineMove {
             piece_type: piece,
             target_type: target_type
         }
+    }
+}
+
+struct MoveList {
+    pub good_captures: Vec<EngineMove>,
+    pub bad_captures: Vec<EngineMove>,
+    pub quiets: Vec<EngineMove>,
+}
+
+impl MoveList {
+    #[inline(always)]
+    pub fn new(qsearch: bool) -> Self {
+        let g = Vec::new();
+        let b = Vec::new();
+        let q = Vec::with_capacity(if qsearch {0} else {64});
+
+        Self {
+            good_captures: g,
+            bad_captures: b,
+            quiets: q
+        }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        return self.good_captures.is_empty() && self.bad_captures.is_empty() && self.quiets.is_empty();
+    }
+
+    pub fn len(&self) -> usize {
+        self.good_captures.len() + self.quiets.len() + self.bad_captures.len()
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = &EngineMove> {
+        self.good_captures
+            .iter()
+            .chain(self.quiets.iter())
+            .chain(self.bad_captures.iter())
+    }
+}
+
+impl IntoIterator for MoveList {
+    type Item = EngineMove;
+
+    type IntoIter = std::iter::Flatten<
+        std::array::IntoIter<Vec<EngineMove>, 3>,
+    >;
+
+    fn into_iter(self) -> Self::IntoIter {
+        [
+            self.good_captures,
+            self.quiets,
+            self.bad_captures,
+        ]
+        .into_iter()
+        .flatten()
+    }
+}
+
+impl std::ops::Index<usize> for MoveList {
+    type Output = EngineMove;
+
+    fn index(&self, mut index: usize) -> &Self::Output {
+        if index < self.good_captures.len() {
+            return &self.good_captures[index];
+        }
+
+        index -= self.good_captures.len();
+
+        if index < self.quiets.len() {
+            return &self.quiets[index];
+        }
+
+        index -= self.quiets.len();
+        &self.bad_captures[index]
     }
 }
 
@@ -223,43 +351,53 @@ impl Engine {
         self.tt = Table::new_for_mb(megabytes);
     }
 
-    fn generate_moves(&self, board: &Board, tt_move: Option<Move>) -> Vec<EngineMove> {
-        let mut moves = Vec::with_capacity(64);
-        let mut captures_len = 0;
+    fn generate_moves(&self, board: &Board, tt_move: Option<Move>) -> MoveList {
+        let mut moves = MoveList::new(false);
 
         board.generate_moves(|moves_for_piece| {
             for mv in moves_for_piece {
-                let emv = EngineMove::new(
+                let mut emv = EngineMove::new(
                     board,
                     mv,
                     moves_for_piece.piece,
                     tt_move == Some(mv),
                 );
 
+                if emv.is_capture {
+                    emv.see_score = static_exchange_evaluation(board, &emv);
+                }
+
                 if emv.is_capture || emv.is_tt {
-                    moves.insert(captures_len, emv);
-                    captures_len += 1;
+                    if emv.see_score >= 0 || emv.is_tt {
+                        moves.good_captures.push(emv);
+                    } else {
+                        moves.bad_captures.push(emv);
+                    }
                 } else {
-                    moves.push(emv);
+                    moves.quiets.push(emv);
                 }
             }
             false
         });
 
-        moves[..captures_len].sort_by_key(|mv| {
+        moves.good_captures.sort_unstable_by_key(|mv| {
             if mv.is_tt {
                 -1_000_000
             } else {
-                value(mv.piece_type) - value(mv.target_type.unwrap())
+                // value(mv.piece_type) - value(mv.target_type.unwrap())
+                -mv.see_score as i32
             }
+        });
+
+        moves.bad_captures.sort_unstable_by_key(|mv| {
+            -mv.see_score
         });
 
         return moves;
     }
 
-    fn generate_qsearch_moves(&self, board: &Board, empty_flag: &mut bool) -> Vec<EngineMove> {
-        let mut moves = Vec::new();
-        let mut captures_len = 0;
+    fn generate_qsearch_moves(&self, board: &Board, empty_flag: &mut bool) -> MoveList {
+        let mut moves = MoveList::new(true);
 
         let enemy_pieces = board.colors(!board.side_to_move());
         board.generate_moves(|mut moves_for_piece| {
@@ -273,7 +411,7 @@ impl Engine {
                 if moves_for_piece.piece == Pawn && mv.to.file() == mv.from.file() && mv.promotion.is_none() {
                     continue;
                 }
-                let emv = EngineMove::new(
+                let mut emv = EngineMove::new(
                     board,
                     mv,
                     moves_for_piece.piece,
@@ -281,17 +419,27 @@ impl Engine {
                 );
 
                 if emv.is_capture {
-                    moves.insert(captures_len, emv);
-                    captures_len += 1;
+                    emv.see_score = static_exchange_evaluation(board, &emv);
+                    if emv.see_score >= 0 {
+                        moves.good_captures.push(emv);
+                    } else {
+                        moves.bad_captures.push(emv);
+                    }
+                    
                 } else if emv.promotion {
-                    moves.push(emv);
+                    moves.quiets.push(emv);
                 }
             }
             false
         });
 
-        moves[..captures_len].sort_by_key(|mv| {
-            value(mv.piece_type) - value(mv.target_type.unwrap())
+        moves.good_captures.sort_unstable_by_key(|mv| {
+            // value(mv.piece_type) - value(mv.target_type.unwrap())
+            -mv.see_score
+        });
+
+        moves.bad_captures.sort_unstable_by_key(|mv| {
+            -mv.see_score
         });
 
         return moves;
@@ -300,6 +448,7 @@ impl Engine {
     fn quiesce(
         &mut self,
         board: &Board,
+        ply: i32,
         mut bounds: SearchBounds,
         context: &mut SearchContext,
     ) -> Option<i32> {
@@ -307,15 +456,32 @@ impl Engine {
             return None;
         }
 
+        if is_repetition(board, &context.history) {
+            return Some(0);
+        }
+
         if board.halfmove_clock() >= 100 {
             if board.generate_moves(|_| true) {
                 return Some(0);
             } else {
-                return Some(eval(board));
+                return Some(terminal_score(board, ply));
             }
         }
 
         let in_check = !board.checkers().is_empty();
+
+        let static_eval = self.eval;
+        if !in_check {
+            if static_eval >= bounds.beta {
+                if board.generate_moves(|_| true) {
+                    return Some(static_eval);
+                }
+                return Some(terminal_score(board, ply));
+            }
+            if static_eval > bounds.alpha {
+                bounds.alpha = static_eval;
+            }
+        }
 
         let mut empty_flag = true;
         let moves;
@@ -327,23 +493,12 @@ impl Engine {
         }
 
         if empty_flag {
-            return Some(eval(board));
-        }
-
-        
-        let static_eval = self.eval;
-        if !in_check {
-            if static_eval >= bounds.beta {
-                return Some(static_eval);
-            }
-            if static_eval > bounds.alpha {
-                bounds.alpha = static_eval;
-            }
+            return Some(terminal_score(board, ply));
         }
 
         let mut result;
         if in_check {
-            result = -100_000;
+            result = -MATE_SCORE;
         } else {
             result = self.eval;
         }
@@ -354,10 +509,14 @@ impl Engine {
             self.eval += mv.material_value;
             self.eval = -self.eval;
 
-            let x = -self.quiesce(&next_board, -bounds, context)?;
+            context.history.push(next_board.hash());
+            let child = self.quiesce(&next_board, ply + 1, -bounds, context);
+            context.history.pop();
 
             self.eval = -self.eval;
             self.eval -= mv.material_value;
+
+            let x = -child?;
 
             if x > result {
                 result = x;
@@ -378,6 +537,7 @@ impl Engine {
         &mut self,
         board: &Board,
         depth: i32,
+        ply: i32,
         mut bounds: SearchBounds,
         context: &mut SearchContext,
     ) -> Option<i32> {
@@ -385,16 +545,20 @@ impl Engine {
             return None;
         }
 
+        if is_repetition(board, &context.history) {
+            return Some(0);
+        }
+
         if board.halfmove_clock() >= 100 {
             if board.generate_moves(|_| true) {
                 return Some(0);
             } else {
-                return Some(eval(board));
+                return Some(terminal_score(board, ply));
             }
         }
 
         if depth <= 0 {
-            return self.quiesce(board, bounds, context);
+            return self.quiesce(board, ply, bounds, context);
         }
 
         let original_bounds = bounds;
@@ -402,6 +566,7 @@ impl Engine {
         let key = board.hash();
         let mut tt_move = None;
         if let Some(entry) = self.tt.get(key) {
+            let entry_score = score_from_tt(entry.score, ply);
             if let Some(mv) = entry.best_move
                 && board.is_legal(mv)
             {
@@ -409,13 +574,13 @@ impl Engine {
             }
             if entry.depth >= depth {
                 match entry.node_type {
-                    EXACT => return Some(entry.score),
-                    UPPER => bounds.beta = min(bounds.beta, entry.score),
-                    LOWER => bounds.alpha = max(bounds.alpha, entry.score),
+                    EXACT => return Some(entry_score),
+                    UPPER => bounds.beta = min(bounds.beta, entry_score),
+                    LOWER => bounds.alpha = max(bounds.alpha, entry_score),
                 }
 
                 if bounds.alpha >= bounds.beta {
-                    return Some(entry.score);
+                    return Some(entry_score);
                 }
             }
         }
@@ -423,7 +588,7 @@ impl Engine {
         let moves = self.generate_moves(board, tt_move);
 
         if moves.is_empty() {
-            return Some(eval(board));
+            return Some(terminal_score(board, ply));
         }
 
         let mut result = -1_000_000_000;
@@ -435,10 +600,14 @@ impl Engine {
             self.eval += mv.material_value;
             self.eval = -self.eval;
             
-            let x = -self.minimax(&next_board, depth - 1, -bounds, context)?;
-            
+            context.history.push(next_board.hash());
+            let child = self.minimax(&next_board, depth - 1, ply + 1, -bounds, context);
+            context.history.pop();
+
             self.eval = -self.eval;
             self.eval -= mv.material_value;
+
+            let x = -child?;
 
             if x > result {
                 result = x;
@@ -467,7 +636,7 @@ impl Engine {
             key,
             TableEntry {
                 key: key,
-                score: result,
+                score: score_to_tt(result, ply),
                 depth: depth,
                 node_type: node_type,
                 best_move: Some(best.mv),
@@ -503,10 +672,14 @@ impl Engine {
             self.eval += mv.material_value;
             self.eval = -self.eval;
 
-            let score = -self.minimax(&next_board, depth - 1, -bounds, context)?;
+            context.history.push(next_board.hash());
+            let child = self.minimax(&next_board, depth - 1, 1, -bounds, context);
+            context.history.pop();
 
             self.eval = -self.eval;
             self.eval -= mv.material_value;
+
+            let score = -child?;
 
             if score > best_score {
                 best_score = score;
@@ -546,6 +719,7 @@ impl Engine {
         let max_depth = request.limits.depth.unwrap_or(i32::MAX).max(1);
         let mut context = SearchContext::new(
             &request.board,
+            request.history.clone(),
             request.limits.clone(),
             Arc::clone(&request.stop),
         );
@@ -587,124 +761,5 @@ impl Engine {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use cozy_chess::Square;
-
-    fn board(fen: &str) -> Board {
-        Board::from_fen(fen, false).unwrap()
-    }
-
-    fn run_quiesce(board: &Board) -> (i32, u64) {
-        let mut engine = Engine {
-            tt: Table::new(1),
-            eval: eval(board),
-        };
-        let mut context = SearchContext::new(
-            board,
-            SearchLimits {
-                infinite: true,
-                ..SearchLimits::default()
-            },
-            Arc::new(AtomicBool::new(false)),
-        );
-        let score = engine
-            .quiesce(
-                board,
-                SearchBounds {
-                    alpha: -1_000_000_000,
-                    beta: 1_000_000_000,
-                },
-                &mut context,
-            )
-            .unwrap();
-
-        (score, context.nodes)
-    }
-
-    #[test]
-    fn qsearch_generates_captures_but_not_quiet_moves() {
-        let board = board("7k/8/8/8/8/8/p7/R6K w - - 0 1");
-        let engine = Engine::new();
-        let mut empty = true;
-        let moves = engine.generate_qsearch_moves(&board, &mut empty);
-
-        assert!(!empty);
-        assert_eq!(moves.len(), 1);
-        assert_eq!(
-            moves[0].mv,
-            Move {
-                from: Square::A1,
-                to: Square::A2,
-                promotion: None,
-            }
-        );
-        assert!(moves[0].is_capture);
-        assert_eq!(run_quiesce(&board).0, 500);
-    }
-
-    #[test]
-    fn qsearch_generates_en_passant() {
-        let board = board("7k/8/8/3pP3/8/8/8/7K w - d6 0 1");
-        let engine = Engine::new();
-        let mut empty = true;
-        let moves = engine.generate_qsearch_moves(&board, &mut empty);
-
-        assert!(!empty);
-        assert_eq!(moves.len(), 1);
-        assert_eq!(
-            moves[0].mv,
-            Move {
-                from: Square::E5,
-                to: Square::D6,
-                promotion: None,
-            }
-        );
-        assert!(moves[0].is_ep);
-    }
-
-    #[test]
-    fn qsearch_generates_all_quiet_promotions() {
-        let board = board("7k/P7/8/8/8/8/8/7K w - - 0 1");
-        let engine = Engine::new();
-        let mut empty = true;
-        let moves = engine.generate_qsearch_moves(&board, &mut empty);
-        let promotions: Vec<_> = moves.iter().map(|mv| mv.mv.promotion.unwrap()).collect();
-
-        assert!(!empty);
-        assert_eq!(moves.len(), 4);
-        assert!(moves.iter().all(|mv| {
-            mv.mv.from == Square::A7 && mv.mv.to == Square::A8 && mv.promotion
-        }));
-        assert_eq!(
-            promotions,
-            vec![Piece::Knight, Piece::Bishop, Piece::Rook, Piece::Queen]
-        );
-    }
-
-    #[test]
-    fn qsearch_searches_quiet_evasions_while_in_check() {
-        let board = board("k3r3/8/8/8/8/8/8/4K3 w - - 0 1");
-        let mut legal_moves = Vec::new();
-        board.generate_moves(|moves| {
-            legal_moves.extend(moves);
-            false
-        });
-
-        assert!(!board.checkers().is_empty());
-        assert!(legal_moves.iter().all(|mv| board.piece_on(mv.to).is_none()));
-
-        let (score, nodes) = run_quiesce(&board);
-        assert_eq!(score, -500);
-        assert_eq!(nodes, 1 + legal_moves.len() as u64);
-    }
-
-    #[test]
-    fn qsearch_scores_checkmate_and_stalemate() {
-        let checkmate = board("7k/6Q1/5K2/8/8/8/8/8 b - - 0 1");
-        let stalemate = board("7k/5K2/6Q1/8/8/8/8/8 b - - 0 1");
-
-        assert_eq!(run_quiesce(&checkmate).0, -100_000);
-        assert_eq!(run_quiesce(&stalemate).0, 0);
-    }
-}
+#[path = "tests/test_engine.rs"]
+mod tests;

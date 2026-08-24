@@ -89,9 +89,9 @@
     },
     "engines": [
         {
-            "name": "quiesce2",
+            "name": "seeprune",
             "dir": "",
-            "cmd": "/home/david/Development/chessbot/models/quiesce2",
+            "cmd": "/home/david/Development/chessbot/models/seeprune",
             "args": "",
             "restart": false,
             "options": [],
@@ -109,9 +109,9 @@
             "variant": 0
         },
         {
-            "name": "fastmvv",
+            "name": "see",
             "dir": "",
-            "cmd": "/home/david/Development/chessbot/models/fastmvv",
+            "cmd": "/home/david/Development/chessbot/models/see",
             "args": "",
             "restart": false,
             "options": [],
@@ -130,16 +130,16 @@
         }
     ],
     "stats": {
-        "quiesce2 vs fastmvv": {
-            "wins": 82,
-            "losses": 21,
-            "draws": 325,
-            "penta_WW": 8,
-            "penta_WD": 66,
-            "penta_WL": 0,
-            "penta_DD": 120,
-            "penta_LD": 19,
-            "penta_LL": 1
+        "seeprune vs see": {
+            "wins": 46,
+            "losses": 42,
+            "draws": 52,
+            "penta_WW": 3,
+            "penta_WD": 16,
+            "penta_WL": 24,
+            "penta_DD": 13,
+            "penta_LD": 10,
+            "penta_LL": 4
         }
     }
 }

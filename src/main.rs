@@ -43,7 +43,7 @@ enum WorkerOutput {
     },
 }
 
-fn parse_position(line: &str, board: &mut Board) {
+fn parse_position(line: &str, board: &mut Board, history: &mut Vec<u64>) {
     let parts: Vec<&str> = line.split_whitespace().collect();
     let Some(position_type) = parts.get(1) else {
         return;
@@ -65,6 +65,7 @@ fn parse_position(line: &str, board: &mut Board) {
         _ => return,
     };
 
+    let mut next_history = vec![next_board.hash()];
     if let Some(moves_start) = parts.iter().position(|part| *part == "moves") {
         for move_text in &parts[moves_start + 1..] {
             let Ok(chess_move) = parse_uci_move(&next_board, move_text) else {
@@ -73,10 +74,12 @@ fn parse_position(line: &str, board: &mut Board) {
             if next_board.try_play(chess_move).is_err() {
                 return;
             }
+            next_history.push(next_board.hash());
         }
     }
 
     *board = next_board;
+    *history = next_history;
 }
 
 fn parse_go(line: &str, board: &Board) -> SearchLimits {
@@ -250,6 +253,7 @@ fn main() {
     });
 
     let mut board = Board::default();
+    let mut history = vec![board.hash()];
     let mut active_search: Option<(u64, Arc<AtomicBool>)> = None;
     let mut next_search_id = 0;
     let mut quitting = false;
@@ -281,7 +285,7 @@ fn main() {
                 print_output("uciok");
             }
             Some("isready") => print_output("readyok"),
-            Some("position") => parse_position(&line, &mut board),
+            Some("position") => parse_position(&line, &mut board, &mut history),
             Some("go") => {
                 if let Some((_, stop)) = active_search.take() {
                     stop.store(true, Ordering::Relaxed);
@@ -292,6 +296,7 @@ fn main() {
                 next_search_id += 1;
                 let request = SearchRequest {
                     board: board.clone(),
+                    history: history.clone(),
                     limits: parse_go(&line, &board),
                     stop: Arc::clone(&stop),
                 };
@@ -308,6 +313,7 @@ fn main() {
                 if let Some((_, stop)) = &active_search {
                     stop.store(true, Ordering::Relaxed);
                 }
+                history = vec![board.hash()];
                 let _ = command_tx.send(Command::NewGame);
             }
             Some("quit") => {
