@@ -265,6 +265,7 @@ fn interrupted_pvs_probe_restores_search_state() {
         engine_move,
         1,
         1,
+        false,
         SearchBounds {
             alpha: -100,
             beta: 100,
@@ -317,7 +318,16 @@ fn root_pvs_matches_full_window_root_search() {
 
     for mv in full_moves.iter().copied() {
         let score = full_engine
-            .search_move(&board, mv, depth - 1, 1, bounds, true, &mut full_context)
+            .search_move(
+                &board,
+                mv,
+                depth - 1,
+                1,
+                true,
+                bounds,
+                true,
+                &mut full_context,
+            )
             .unwrap();
 
         if full_result.is_none_or(|(_, best_score)| score > best_score) {

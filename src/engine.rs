@@ -1,11 +1,8 @@
 use std::{
-    cmp::{max, min},
-    ops::Neg,
-    sync::{
+    cmp::{max, min}, ops::Neg, ptr::null, sync::{
         Arc,
         atomic::{AtomicBool, Ordering},
-    },
-    time::{Duration, Instant},
+    }, time::{Duration, Instant},
 };
 
 use cozy_chess::{
@@ -671,6 +668,7 @@ impl Engine {
         mv: EngineMove,
         depth: i32,
         ply: i32,
+        pv: bool,
         bounds: SearchBounds,
         first_move: bool,
         context: &mut SearchContext,
@@ -682,16 +680,16 @@ impl Engine {
 
         context.history.push(next_board.hash());
         let child = if first_move {
-            self.minimax(&next_board, depth, ply, -bounds, context)
+            self.minimax(&next_board, depth, ply, pv, -bounds, context)
         } else {
             let null_bounds = SearchBounds {
                 alpha: bounds.alpha,
                 beta: bounds.alpha + 1,
             };
 
-            match self.minimax(&next_board, depth, ply, -null_bounds, context) {
+            match self.minimax(&next_board, depth, ply, false, -null_bounds, context) {
                 Some(score) if -score > bounds.alpha && -score < bounds.beta => {
-                    self.minimax(&next_board, depth, ply, -bounds, context)
+                    self.minimax(&next_board, depth, ply, pv, -bounds, context)
                 }
                 child => child,
             }
@@ -707,6 +705,7 @@ impl Engine {
         board: &Board,
         depth: i32,
         ply: i32,
+        pv: bool,
         mut bounds: SearchBounds,
         context: &mut SearchContext,
     ) -> Option<i32> {
@@ -760,6 +759,26 @@ impl Engine {
             return Some(terminal_score(board, ply));
         }
 
+        let in_check = !board.checkers().is_empty();
+        let static_eval = self.nnue.evaluate(board.side_to_move());
+
+        // let rfp_margin = 256 * depth;
+        // if !in_check && !pv && static_eval - rfp_margin >= bounds.beta {
+        //     return Some(static_eval);
+        // }
+
+        if !in_check && !pv {
+            let r = 3; // depth reduction apparently
+            let new_board = board.null_move().unwrap();
+
+            let null_bounds = SearchBounds{alpha: -bounds.beta, beta: -bounds.beta+1};
+            let score = self.minimax(&new_board, depth-r, ply, false, null_bounds, context);
+
+            if score.is_some() && -score.unwrap() >= bounds.beta {
+                return Some(-score.unwrap());
+            };
+        }
+
         let stm_index = if board.side_to_move() == White { 0 } else { 1 };
         let mut picker = MovePicker::new(moves, stm_index);
 
@@ -768,7 +787,16 @@ impl Engine {
         let mut first_move = true;
 
         while let Some(mv) = picker.next(&self.history) {
-            let x = self.search_move(board, mv, depth - 1, ply + 1, bounds, first_move, context)?;
+            let x = self.search_move(
+                board,
+                mv,
+                depth - 1,
+                ply + 1,
+                pv,
+                bounds,
+                first_move,
+                context,
+            )?;
 
             if x > result {
                 result = x;
@@ -842,7 +870,8 @@ impl Engine {
         let mut picker = MovePicker::new(root_moves.clone(), stm_index);
         let mut first_move = true;
         while let Some(mv) = picker.next(&self.history) {
-            let score = self.search_move(board, mv, depth - 1, 1, bounds, first_move, context)?;
+            let score =
+                self.search_move(board, mv, depth - 1, 1, true, bounds, first_move, context)?;
 
             if score > best_score {
                 best_score = score;

@@ -89,6 +89,26 @@
     },
     "engines": [
         {
+            "name": "nmp",
+            "dir": "",
+            "cmd": "/home/david/Development/chessbot/models/nmp",
+            "args": "",
+            "restart": false,
+            "options": [],
+            "limit": {
+                "tc": {
+                    "increment": 80,
+                    "fixed_time": 0,
+                    "time": 8000,
+                    "moves": 0,
+                    "timemargin": 0
+                },
+                "nodes": 0,
+                "plies": 0
+            },
+            "variant": 0
+        },
+        {
             "name": "postnnue100mv3",
             "dir": "",
             "cmd": "/home/david/Development/chessbot/models/postnnue100mv3",
@@ -107,39 +127,19 @@
                 "plies": 0
             },
             "variant": 0
-        },
-        {
-            "name": "postnnue100mv1",
-            "dir": "",
-            "cmd": "/home/david/Development/chessbot/models/postnnue100mv1",
-            "args": "",
-            "restart": false,
-            "options": [],
-            "limit": {
-                "tc": {
-                    "increment": 80,
-                    "fixed_time": 0,
-                    "time": 8000,
-                    "moves": 0,
-                    "timemargin": 0
-                },
-                "nodes": 0,
-                "plies": 0
-            },
-            "variant": 0
         }
     ],
     "stats": {
-        "postnnue100mv3 vs postnnue100mv1": {
-            "wins": 159,
-            "losses": 50,
-            "draws": 37,
-            "penta_WW": 50,
-            "penta_WD": 25,
-            "penta_WL": 34,
-            "penta_DD": 3,
-            "penta_LD": 6,
-            "penta_LL": 5
+        "nmp vs postnnue100mv3": {
+            "wins": 146,
+            "losses": 47,
+            "draws": 69,
+            "penta_WW": 39,
+            "penta_WD": 40,
+            "penta_WL": 28,
+            "penta_DD": 8,
+            "penta_LD": 13,
+            "penta_LL": 3
         }
     }
 }
