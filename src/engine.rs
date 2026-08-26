@@ -16,7 +16,8 @@ use cozy_chess::{
 };
 
 use crate::{
-    evaluate::{eval, static_exchange_evaluation, value},
+    evaluate::{static_exchange_evaluation, value},
+    nnue::NnueState,
     transposition::{
         NodeType::{EXACT, LOWER, UPPER},
         Table, TableEntry,
@@ -222,6 +223,7 @@ pub struct EngineMove {
     pub promotion: bool,
     pub piece_type: Piece,
     pub target_type: Option<Piece>,
+    pub is_castle: bool,
 }
 
 impl EngineMove {
@@ -232,6 +234,7 @@ impl EngineMove {
         let mut ep = false;
         let mut promotion = false;
         let mut target_type = None;
+        let is_castle = piece == Piece::King && board.color_on(mv.to) == Some(board.side_to_move());
 
         if mv.promotion.is_some() {
             material_value += value(mv.promotion.unwrap()) - value(piece);
@@ -265,6 +268,7 @@ impl EngineMove {
             promotion: promotion,
             piece_type: piece,
             target_type: target_type,
+            is_castle,
         }
     }
 }
@@ -295,10 +299,12 @@ impl MoveList {
             && self.quiets.is_empty();
     }
 
+    #[cfg(test)]
     pub fn len(&self) -> usize {
         self.good_captures.len() + self.quiets.len() + self.bad_captures.len()
     }
 
+    #[cfg(test)]
     pub fn iter(&self) -> impl Iterator<Item = &EngineMove> {
         self.good_captures
             .iter()
@@ -348,9 +354,148 @@ fn history_bonus(depth: i32) -> i32 {
     depth.saturating_mul(depth)
 }
 
+#[derive(Clone, Copy, PartialEq)]
+enum Stage {
+    TtMove,
+    GoodCaptures,
+    Quiets,
+    BadCaptures,
+    Done,
+}
+
+/// Orders moves lazily: instead of fully sorting every list up front, each
+/// `next()` call selects the highest-priority remaining move of the current
+/// stage. Nodes usually cut off after a handful of moves, so most ordering
+/// work never happens.
+struct MovePicker {
+    stage: Stage,
+    tt_move: Option<EngineMove>,
+    good_captures: Vec<EngineMove>,
+    quiets: Vec<EngineMove>,
+    bad_captures: Vec<EngineMove>,
+    stm_index: usize,
+    quiet_remaining: usize,
+}
+
+fn pick_max(list: &mut Vec<EngineMove>, key: impl Fn(&EngineMove) -> i32) -> Option<EngineMove> {
+    let len = list.len();
+    if len == 0 {
+        return None;
+    }
+    let mut best = 0;
+    let mut best_key = key(&list[0]);
+    for i in 1..len {
+        let k = key(&list[i]);
+        if k > best_key {
+            best = i;
+            best_key = k;
+        }
+    }
+    Some(list.swap_remove(best))
+}
+
+fn pick_max_prefix(
+    list: &mut [EngineMove],
+    len: usize,
+    key: impl Fn(&EngineMove) -> i32,
+) -> Option<EngineMove> {
+    if len == 0 {
+        return None;
+    }
+    let mut best = 0;
+    let mut best_key = key(&list[0]);
+    for (i, mv) in list.iter().enumerate().take(len).skip(1) {
+        let k = key(mv);
+        if k > best_key {
+            best = i;
+            best_key = k;
+        }
+    }
+    list.swap(best, len - 1);
+    Some(list[len - 1])
+}
+
+impl MovePicker {
+    fn new(mut moves: MoveList, stm_index: usize) -> Self {
+        let tt_move = moves
+            .good_captures
+            .iter()
+            .position(|mv| mv.is_tt)
+            .map(|i| moves.good_captures.swap_remove(i));
+        let stage = if tt_move.is_some() {
+            Stage::TtMove
+        } else {
+            Stage::GoodCaptures
+        };
+
+        let quiet_remaining = moves.quiets.len();
+        Self {
+            stage,
+            tt_move,
+            good_captures: moves.good_captures,
+            quiets: moves.quiets,
+            bad_captures: moves.bad_captures,
+            stm_index,
+            quiet_remaining,
+        }
+    }
+
+    fn next(&mut self, history: &[[[i32; 64]; 64]; 2]) -> Option<EngineMove> {
+        loop {
+            match self.stage {
+                Stage::TtMove => {
+                    self.stage = Stage::GoodCaptures;
+                    if let Some(mv) = self.tt_move.take() {
+                        return Some(mv);
+                    }
+                }
+                Stage::GoodCaptures => {
+                    if let Some(mv) = pick_max(&mut self.good_captures, |mv| {
+                        if mv.is_tt {
+                            i32::MAX
+                        } else {
+                            mv.see_score as i32
+                        }
+                    }) {
+                        return Some(mv);
+                    }
+                    self.stage = Stage::Quiets;
+                }
+                Stage::Quiets => {
+                    let stm = self.stm_index;
+                    let mv = pick_max_prefix(&mut self.quiets, self.quiet_remaining, |mv| {
+                        if mv.promotion {
+                            mv.material_value + MAX_HISTORY
+                        } else {
+                            history[stm][mv.mv.from as usize][mv.mv.to as usize]
+                        }
+                    });
+                    self.quiet_remaining = self.quiet_remaining.saturating_sub(1);
+                    if let Some(mv) = mv {
+                        return Some(mv);
+                    }
+                    self.stage = Stage::BadCaptures;
+                }
+                Stage::BadCaptures => {
+                    if let Some(mv) = pick_max(&mut self.bad_captures, |mv| mv.see_score as i32) {
+                        return Some(mv);
+                    }
+                    self.stage = Stage::Done;
+                }
+                Stage::Done => return None,
+            }
+        }
+    }
+
+    /// All quiet moves handed out so far.
+    fn tried_quiets(&self) -> &[EngineMove] {
+        &self.quiets[self.quiet_remaining..]
+    }
+}
+
 pub struct Engine {
     tt: Table,
-    eval: i32,
+    nnue: NnueState,
     history: [[[i32; 64]; 64]; 2],
 }
 
@@ -358,7 +503,7 @@ impl Engine {
     pub fn new() -> Self {
         Self {
             tt: Table::new_for_mb(16),
-            eval: 0,
+            nnue: NnueState::default(),
             history: [[[0; 64]; 64]; 2],
         }
     }
@@ -393,26 +538,6 @@ impl Engine {
             }
             false
         });
-
-        moves.good_captures.sort_unstable_by_key(|mv| {
-            if mv.is_tt {
-                -1_000_000
-            } else {
-                // value(mv.piece_type) - value(mv.target_type.unwrap())
-                -mv.see_score as i32
-            }
-        });
-
-        moves.quiets.sort_unstable_by_key(|mv| {
-            if mv.promotion {
-                -mv.material_value - MAX_HISTORY
-            } else {
-                -self.history[if board.side_to_move() == White { 0 } else { 1 }]
-                    [mv.mv.from as usize][mv.mv.to as usize]
-            }
-        });
-
-        moves.bad_captures.sort_unstable_by_key(|mv| -mv.see_score);
 
         return moves;
     }
@@ -451,13 +576,6 @@ impl Engine {
             false
         });
 
-        moves.good_captures.sort_unstable_by_key(|mv| {
-            // value(mv.piece_type) - value(mv.target_type.unwrap())
-            -mv.see_score
-        });
-
-        moves.bad_captures.sort_unstable_by_key(|mv| -mv.see_score);
-
         return moves;
     }
 
@@ -486,7 +604,7 @@ impl Engine {
 
         let in_check = !board.checkers().is_empty();
 
-        let static_eval = self.eval;
+        let static_eval = self.nnue.evaluate(board.side_to_move());
         if !in_check {
             if static_eval >= bounds.beta {
                 if board.generate_moves(|_| true) {
@@ -516,21 +634,19 @@ impl Engine {
         if in_check {
             result = -MATE_SCORE;
         } else {
-            result = self.eval;
+            result = static_eval;
         }
-        for mv in moves {
+        let mut picker = MovePicker::new(moves, if board.side_to_move() == White { 0 } else { 1 });
+        while let Some(mv) = picker.next(&self.history) {
             let mut next_board = board.clone();
+            let previous_nnue = self.nnue;
+            self.nnue.play_move(board.side_to_move(), &mv);
             next_board.play_unchecked(mv.mv);
-
-            self.eval += mv.material_value;
-            self.eval = -self.eval;
 
             context.history.push(next_board.hash());
             let child = self.quiesce(&next_board, ply + 1, -bounds, context);
             context.history.pop();
-
-            self.eval = -self.eval;
-            self.eval -= mv.material_value;
+            self.nnue = previous_nnue;
 
             let x = -child?;
 
@@ -560,10 +676,9 @@ impl Engine {
         context: &mut SearchContext,
     ) -> Option<i32> {
         let mut next_board = board.clone();
+        let previous_nnue = self.nnue;
+        self.nnue.play_move(board.side_to_move(), &mv);
         next_board.play_unchecked(mv.mv);
-
-        self.eval += mv.material_value;
-        self.eval = -self.eval;
 
         context.history.push(next_board.hash());
         let child = if first_move {
@@ -582,9 +697,7 @@ impl Engine {
             }
         };
         context.history.pop();
-
-        self.eval = -self.eval;
-        self.eval -= mv.material_value;
+        self.nnue = previous_nnue;
 
         child.map(|score| -score)
     }
@@ -597,6 +710,14 @@ impl Engine {
         mut bounds: SearchBounds,
         context: &mut SearchContext,
     ) -> Option<i32> {
+        if depth <= 0 {
+            return self.quiesce(board, ply, bounds, context);
+        }
+
+        if context.should_stop() {
+            return None;
+        }
+
         if is_repetition(board, &context.history) {
             return Some(0);
         }
@@ -607,14 +728,6 @@ impl Engine {
             } else {
                 return Some(terminal_score(board, ply));
             }
-        }
-
-        if depth <= 0 {
-            return self.quiesce(board, ply, bounds, context);
-        }
-
-        if context.should_stop() {
-            return None;
         }
 
         let original_bounds = bounds;
@@ -647,16 +760,19 @@ impl Engine {
             return Some(terminal_score(board, ply));
         }
 
+        let stm_index = if board.side_to_move() == White { 0 } else { 1 };
+        let mut picker = MovePicker::new(moves, stm_index);
+
         let mut result = -1_000_000_000;
-        let mut best = moves[0];
+        let mut best_move: Option<EngineMove> = None;
         let mut first_move = true;
 
-        for mv in moves.iter().copied() {
+        while let Some(mv) = picker.next(&self.history) {
             let x = self.search_move(board, mv, depth - 1, ply + 1, bounds, first_move, context)?;
 
             if x > result {
                 result = x;
-                best = mv;
+                best_move = Some(mv);
                 if x > bounds.alpha {
                     bounds.alpha = x;
                 }
@@ -669,16 +785,11 @@ impl Engine {
                             [mv.mv.from as usize][mv.mv.to as usize],
                         history_bonus(depth),
                     );
-                    for mv2 in moves.iter().copied() {
-                        if mv2.mv == mv.mv {
-                            break;
-                        }
-
-                        if !mv2.is_capture && !mv2.promotion {
+                    for mv2 in picker.tried_quiets() {
+                        if mv2.mv != mv.mv {
                             update_history(
-                                &mut self.history
-                                    [if board.side_to_move() == White { 0 } else { 1 }]
-                                    [mv2.mv.from as usize][mv2.mv.to as usize],
+                                &mut self.history[stm_index][mv2.mv.from as usize]
+                                    [mv2.mv.to as usize],
                                 -history_bonus(depth) / 4,
                             );
                         }
@@ -707,7 +818,7 @@ impl Engine {
                 score: score_to_tt(result, ply),
                 depth: depth,
                 node_type: node_type,
-                best_move: Some(best.mv),
+                best_move: best_move.map(|mv| mv.mv),
             },
         );
         Some(result)
@@ -727,9 +838,10 @@ impl Engine {
             beta: 1_000_000_000,
         };
 
-        self.eval = eval(board);
+        let stm_index = if board.side_to_move() == White { 0 } else { 1 };
+        let mut picker = MovePicker::new(root_moves.clone(), stm_index);
         let mut first_move = true;
-        for mv in root_moves.iter().copied() {
+        while let Some(mv) = picker.next(&self.history) {
             let score = self.search_move(board, mv, depth - 1, 1, bounds, first_move, context)?;
 
             if score > best_score {
@@ -758,6 +870,7 @@ impl Engine {
 
         self.history = [[[0; 64]; 64]; 2];
         self.tt.clear();
+        self.nnue = NnueState::from_board(&request.board);
 
         if root_moves.is_empty() {
             return SearchResult { best_move: None };

@@ -89,9 +89,9 @@
     },
     "engines": [
         {
-            "name": "pvs",
+            "name": "postnnue100mv2",
             "dir": "",
-            "cmd": "/home/david/Development/chessbot/models/pvs",
+            "cmd": "/home/david/Development/chessbot/models/postnnue100mv2",
             "args": "",
             "restart": false,
             "options": [],
@@ -109,9 +109,9 @@
             "variant": 0
         },
         {
-            "name": "history",
+            "name": "postnnue100mv1",
             "dir": "",
-            "cmd": "/home/david/Development/chessbot/models/history",
+            "cmd": "/home/david/Development/chessbot/models/postnnue100mv1",
             "args": "",
             "restart": false,
             "options": [],
@@ -130,16 +130,16 @@
         }
     ],
     "stats": {
-        "pvs vs history": {
-            "wins": 102,
-            "losses": 82,
-            "draws": 136,
-            "penta_WW": 16,
-            "penta_WD": 31,
-            "penta_WL": 39,
-            "penta_DD": 38,
-            "penta_LD": 29,
-            "penta_LL": 7
+        "postnnue100mv2 vs postnnue100mv1": {
+            "wins": 39,
+            "losses": 43,
+            "draws": 18,
+            "penta_WW": 7,
+            "penta_WD": 6,
+            "penta_WL": 19,
+            "penta_DD": 3,
+            "penta_LD": 6,
+            "penta_LL": 9
         }
     }
 }

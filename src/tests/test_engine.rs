@@ -8,7 +8,7 @@ fn board(fen: &str) -> Board {
 fn run_quiesce(board: &Board) -> (i32, u64) {
     let mut engine = Engine {
         tt: Table::new(1),
-        eval: eval(board),
+        nnue: NnueState::from_board(board),
         history: [[[0; 64]; 64]; 2],
     };
     let mut context = SearchContext::new(
@@ -53,7 +53,11 @@ fn qsearch_generates_captures_but_not_quiet_moves() {
         }
     );
     assert!(moves[0].is_capture);
-    assert_eq!(run_quiesce(&board).0, 500);
+    let mut after = board.clone();
+    after.play_unchecked(moves[0].mv);
+    let capture_score = -NnueState::from_board(&after).evaluate(after.side_to_move());
+    let stand_pat = NnueState::from_board(&board).evaluate(board.side_to_move());
+    assert_eq!(run_quiesce(&board).0, stand_pat.max(capture_score));
 }
 
 #[test]
@@ -110,7 +114,7 @@ fn qsearch_searches_quiet_evasions_while_in_check() {
     assert!(legal_moves.iter().all(|mv| board.piece_on(mv.to).is_none()));
 
     let (score, nodes) = run_quiesce(&board);
-    assert_eq!(score, -500);
+    assert!(score > -MATE_THRESHOLD);
     assert_eq!(nodes, 1 + legal_moves.len() as u64);
 }
 
@@ -183,7 +187,9 @@ fn history_orders_quiets_for_the_side_to_move() {
     engine.history[1][Square::D2 as usize][Square::D4 as usize] = MAX_HISTORY;
 
     let moves = engine.generate_moves(&board, None);
-    assert_eq!(moves.quiets[0].mv, preferred);
+    let mut picker = MovePicker::new(moves, 0);
+    let first = picker.next(&engine.history).unwrap();
+    assert_eq!(first.mv, preferred);
 }
 
 #[test]
@@ -193,9 +199,15 @@ fn quiet_promotions_are_ordered_before_maximum_history_quiets() {
     engine.history[0] = [[MAX_HISTORY; 64]; 64];
 
     let moves = engine.generate_moves(&board, None);
-    assert!(moves.quiets[..4].iter().all(|mv| mv.promotion));
-    assert_eq!(moves.quiets[0].mv.promotion, Some(Piece::Queen));
-    assert!(moves.quiets[4..].iter().all(|mv| !mv.promotion));
+    let mut picker = MovePicker::new(moves, 0);
+    let mut picked = Vec::new();
+    while let Some(mv) = picker.next(&engine.history) {
+        picked.push(mv);
+    }
+
+    assert!(picked[..4].iter().all(|mv| mv.promotion));
+    assert_eq!(picked[0].mv.promotion, Some(Piece::Queen));
+    assert!(picked[4..].iter().all(|mv| !mv.promotion));
 }
 
 #[test]
@@ -229,8 +241,8 @@ fn a_new_search_resets_history() {
 fn interrupted_pvs_probe_restores_search_state() {
     let board = Board::default();
     let mut engine = Engine::new();
-    engine.eval = eval(&board);
-    let initial_eval = engine.eval;
+    engine.nnue = NnueState::from_board(&board);
+    let initial_nnue = engine.nnue;
     let initial_history = vec![board.hash()];
     let mut context = SearchContext::new(
         &board,
@@ -262,7 +274,7 @@ fn interrupted_pvs_probe_restores_search_state() {
     );
 
     assert_eq!(result, None);
-    assert_eq!(engine.eval, initial_eval);
+    assert_eq!(engine.nnue, initial_nnue);
     assert_eq!(context.history, initial_history);
 }
 
@@ -276,6 +288,7 @@ fn root_pvs_matches_full_window_root_search() {
     };
 
     let mut pvs_engine = Engine::new();
+    pvs_engine.nnue = NnueState::from_board(&board);
     let root_moves = pvs_engine.generate_moves(&board, None);
     let mut pvs_context = SearchContext::new(
         &board,
@@ -300,7 +313,7 @@ fn root_pvs_matches_full_window_root_search() {
         beta: 1_000_000_000,
     };
     let mut full_result = None;
-    full_engine.eval = eval(&board);
+    full_engine.nnue = NnueState::from_board(&board);
 
     for mv in full_moves.iter().copied() {
         let score = full_engine

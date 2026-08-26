@@ -18,6 +18,8 @@ use crate::engine::{Engine, SearchInfo, SearchLimits, SearchRequest, SearchResul
 mod bulk;
 mod engine;
 mod evaluate;
+mod nnue;
+mod selfplay;
 mod transposition;
 
 #[cfg(test)]
@@ -227,12 +229,22 @@ fn spawn_input_reader(event_tx: mpsc::Sender<MainEvent>) -> JoinHandle<()> {
 }
 
 fn main() {
-    if std::env::args().nth(1).as_deref() == Some("bulk-eval") {
-        if let Err(error) = bulk::run_from_env() {
-            eprintln!("bulk-eval failed: {error}");
-            std::process::exit(1);
+    match std::env::args().nth(1).as_deref() {
+        Some("bulk-eval") => {
+            if let Err(error) = bulk::run_from_env() {
+                eprintln!("bulk-eval failed: {error}");
+                std::process::exit(1);
+            }
+            return;
         }
-        return;
+        Some("selfplay") => {
+            if let Err(error) = selfplay::run_from_env() {
+                eprintln!("selfplay failed: {error}");
+                std::process::exit(1);
+            }
+            return;
+        }
+        _ => {}
     }
 
     run_uci();

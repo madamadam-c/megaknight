@@ -1,7 +1,4 @@
-use crate::{
-    engine::EngineMove,
-    evaluate::{eval, static_exchange_evaluation},
-};
+use crate::{engine::EngineMove, evaluate::static_exchange_evaluation};
 use cozy_chess::{Board, util::parse_uci_move};
 
 fn see(fen: &str, move_text: &str) -> i16 {
@@ -10,12 +7,6 @@ fn see(fen: &str, move_text: &str) -> i16 {
     let piece = board.piece_on(mv.from).unwrap();
 
     static_exchange_evaluation(&board, &EngineMove::new(&board, mv, piece, false))
-}
-
-#[test]
-fn test_eval() {
-    let board = Board::default();
-    assert_eq!(0, eval(&board));
 }
 
 #[test]
