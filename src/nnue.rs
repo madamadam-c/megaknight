@@ -17,7 +17,7 @@ const NETWORK_PAYLOAD_SIZE: usize = (INPUT_SIZE * HIDDEN_SIZE + HIDDEN_SIZE + HI
 const NETWORK_FILE_SIZE: usize = 24_704;
 
 const NETWORK_BYTES: &[u8; NETWORK_FILE_SIZE] = include_bytes!(
-    "../datagen/chessbot-selfplay-100m-10k-100m-checkpoints/chessbot-768-16-1-selfplay-100m-10k-100m-100/quantised.bin"
+    "/home/david/Development/chessbot/datagen/chessbot-selfplay-100m-5k-100m-checkpoints/chessbot-768-16-1-selfplay-100m-5k-100m-100/quantised.bin"
 );
 const NETWORK: Network = Network::from_bytes(NETWORK_BYTES);
 
