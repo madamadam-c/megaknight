@@ -767,10 +767,10 @@ impl Engine {
         let in_check = !board.checkers().is_empty();
         let static_eval = self.nnue.evaluate(board.side_to_move());
 
-        // let rfp_margin = 350 * depth;
-        // if !in_check && !pv && depth <= 5 && static_eval - rfp_margin >= bounds.beta {
-        //     return Some(static_eval);
-        // }
+        let rfp_margin = 123 * depth;
+        if !in_check && !pv && depth <= 5 && static_eval - rfp_margin >= bounds.beta {
+            return Some(static_eval);
+        }
 
         if !in_check && 
            !pv && 

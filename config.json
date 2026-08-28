@@ -89,6 +89,26 @@
     },
     "engines": [
         {
+            "name": "rfp",
+            "dir": "",
+            "cmd": "/home/david/Development/chessbot/models/rfp",
+            "args": "",
+            "restart": false,
+            "options": [],
+            "limit": {
+                "tc": {
+                    "increment": 80,
+                    "fixed_time": 0,
+                    "time": 8000,
+                    "moves": 0,
+                    "timemargin": 0
+                },
+                "nodes": 0,
+                "plies": 0
+            },
+            "variant": 0
+        },
+        {
             "name": "lmr",
             "dir": "",
             "cmd": "/home/david/Development/chessbot/models/lmr",
@@ -107,39 +127,19 @@
                 "plies": 0
             },
             "variant": 0
-        },
-        {
-            "name": "64HL",
-            "dir": "",
-            "cmd": "/home/david/Development/chessbot/models/64HL",
-            "args": "",
-            "restart": false,
-            "options": [],
-            "limit": {
-                "tc": {
-                    "increment": 80,
-                    "fixed_time": 0,
-                    "time": 8000,
-                    "moves": 0,
-                    "timemargin": 0
-                },
-                "nodes": 0,
-                "plies": 0
-            },
-            "variant": 0
         }
     ],
     "stats": {
-        "lmr vs 64HL": {
+        "rfp vs lmr": {
             "wins": 197,
-            "losses": 100,
-            "draws": 115,
-            "penta_WW": 52,
-            "penta_WD": 51,
-            "penta_WL": 42,
-            "penta_DD": 14,
-            "penta_LD": 36,
-            "penta_LL": 11
+            "losses": 98,
+            "draws": 119,
+            "penta_WW": 46,
+            "penta_WD": 62,
+            "penta_WL": 43,
+            "penta_DD": 15,
+            "penta_LD": 27,
+            "penta_LL": 14
         }
     }
 }
