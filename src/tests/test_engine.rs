@@ -9,7 +9,7 @@ fn run_quiesce(board: &Board) -> (i32, u64) {
     let mut engine = Engine {
         tt: Table::new(1),
         nnue: NnueState::from_board(board),
-        history: [[[0; 64]; 64]; 2],
+        quiet_history: [[[0; 64]; 64]; 2],
     };
     let mut context = SearchContext::new(
         board,
@@ -183,12 +183,12 @@ fn history_orders_quiets_for_the_side_to_move() {
         promotion: None,
     };
 
-    engine.history[0][Square::E2 as usize][Square::E4 as usize] = 1;
-    engine.history[1][Square::D2 as usize][Square::D4 as usize] = MAX_HISTORY;
+    engine.quiet_history[0][Square::E2 as usize][Square::E4 as usize] = 1;
+    engine.quiet_history[1][Square::D2 as usize][Square::D4 as usize] = MAX_HISTORY;
 
     let moves = engine.generate_moves(&board, None);
     let mut picker = MovePicker::new(moves, 0);
-    let first = picker.next(&engine.history).unwrap();
+    let first = picker.next(&engine.quiet_history).unwrap();
     assert_eq!(first.mv, preferred);
 }
 
@@ -196,12 +196,12 @@ fn history_orders_quiets_for_the_side_to_move() {
 fn quiet_promotions_are_ordered_before_maximum_history_quiets() {
     let board = board("7k/P7/8/8/8/8/8/7K w - - 0 1");
     let mut engine = Engine::new();
-    engine.history[0] = [[MAX_HISTORY; 64]; 64];
+    engine.quiet_history[0] = [[MAX_HISTORY; 64]; 64];
 
     let moves = engine.generate_moves(&board, None);
     let mut picker = MovePicker::new(moves, 0);
     let mut picked = Vec::new();
-    while let Some(mv) = picker.next(&engine.history) {
+    while let Some(mv) = picker.next(&engine.quiet_history) {
         picked.push(mv);
     }
 
@@ -214,7 +214,7 @@ fn quiet_promotions_are_ordered_before_maximum_history_quiets() {
 fn a_new_search_resets_history() {
     let board = Board::default();
     let mut engine = Engine::new();
-    engine.history = [[[123; 64]; 64]; 2];
+    engine.quiet_history = [[[123; 64]; 64]; 2];
     let request = SearchRequest {
         history: vec![board.hash()],
         board,
@@ -229,7 +229,7 @@ fn a_new_search_resets_history() {
 
     assert!(
         engine
-            .history
+            .quiet_history
             .iter()
             .flatten()
             .flatten()
