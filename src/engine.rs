@@ -811,16 +811,16 @@ impl Engine {
         let mut best_move: Option<EngineMove> = None;
         let mut first_move = true;
 
-        // let mut moves_played = 0;
+        let mut moves_played = 0;
         while let Some(mv) = picker.next(&self.history) {
-            // moves_played += 1;
+            moves_played += 1;
 
-            let lmr_depth = 0;
-            // let lmr_depth = if depth <= 3 || first_move || mv.is_capture || mv.promotion || in_check {
-            //     0
-            // } else {
-            //     (0.99 + (depth as f32).ln() * (moves_played as f32).ln() / 3.14) as i32
-            // };
+            // let lmr_depth = 0;
+            let lmr_depth = if depth <= 3 || first_move || mv.is_capture || mv.promotion || in_check {
+                0
+            } else {
+                (0.99 + (depth as f32).ln() * (moves_played as f32).ln() / 3.14) as i32
+            };
 
             let mut x = self.search_move(
                 board,

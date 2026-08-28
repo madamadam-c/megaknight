@@ -89,6 +89,26 @@
     },
     "engines": [
         {
+            "name": "lmr",
+            "dir": "",
+            "cmd": "/home/david/Development/chessbot/models/lmr",
+            "args": "",
+            "restart": false,
+            "options": [],
+            "limit": {
+                "tc": {
+                    "increment": 80,
+                    "fixed_time": 0,
+                    "time": 8000,
+                    "moves": 0,
+                    "timemargin": 0
+                },
+                "nodes": 0,
+                "plies": 0
+            },
+            "variant": 0
+        },
+        {
             "name": "64HL",
             "dir": "",
             "cmd": "/home/david/Development/chessbot/models/64HL",
@@ -107,39 +127,19 @@
                 "plies": 0
             },
             "variant": 0
-        },
-        {
-            "name": "fixseeprune",
-            "dir": "",
-            "cmd": "/home/david/Development/chessbot/models/fixseeprune",
-            "args": "",
-            "restart": false,
-            "options": [],
-            "limit": {
-                "tc": {
-                    "increment": 80,
-                    "fixed_time": 0,
-                    "time": 8000,
-                    "moves": 0,
-                    "timemargin": 0
-                },
-                "nodes": 0,
-                "plies": 0
-            },
-            "variant": 0
         }
     ],
     "stats": {
-        "64HL vs fixseeprune": {
-            "wins": 147,
-            "losses": 57,
-            "draws": 84,
-            "penta_WW": 33,
-            "penta_WD": 45,
-            "penta_WL": 36,
-            "penta_DD": 11,
-            "penta_LD": 17,
-            "penta_LL": 2
+        "lmr vs 64HL": {
+            "wins": 197,
+            "losses": 100,
+            "draws": 115,
+            "penta_WW": 52,
+            "penta_WD": 51,
+            "penta_WL": 42,
+            "penta_DD": 14,
+            "penta_LD": 36,
+            "penta_LL": 11
         }
     }
 }
