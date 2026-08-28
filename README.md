@@ -722,3 +722,6 @@ SearchLimits describes requested limits
 SearchInfo describes progress
 SearchResult describes completion
 ```
+
+before implementing lmr or rfp or qs see pruning or basically any search optimisations
+except for nmp, the engine was at 2500 rating (compared to stash 18 at 10+0.1 tc) roughly

@@ -271,6 +271,7 @@ fn interrupted_pvs_probe_restores_search_state() {
             beta: 100,
         },
         false,
+        false,
         &mut context,
     );
 
@@ -325,6 +326,7 @@ fn root_pvs_matches_full_window_root_search() {
                 1,
                 true,
                 bounds,
+                true,
                 true,
                 &mut full_context,
             )

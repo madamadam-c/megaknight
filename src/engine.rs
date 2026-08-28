@@ -1,8 +1,11 @@
 use std::{
-    cmp::{max, min}, ops::Neg, ptr::null, sync::{
+    cmp::{max, min},
+    ops::Neg,
+    sync::{
         Arc,
         atomic::{AtomicBool, Ordering},
-    }, time::{Duration, Instant},
+    },
+    time::{Duration, Instant},
 };
 
 use cozy_chess::{
@@ -296,7 +299,6 @@ impl MoveList {
             && self.quiets.is_empty();
     }
 
-    #[cfg(test)]
     pub fn len(&self) -> usize {
         self.good_captures.len() + self.quiets.len() + self.bad_captures.len()
     }
@@ -635,6 +637,9 @@ impl Engine {
         }
         let mut picker = MovePicker::new(moves, if board.side_to_move() == White { 0 } else { 1 });
         while let Some(mv) = picker.next(&self.history) {
+            if !in_check && mv.see_score < -100 {
+                continue;
+            }
             let mut next_board = board.clone();
             let previous_nnue = self.nnue;
             self.nnue.play_move(board.side_to_move(), &mv);
@@ -670,6 +675,7 @@ impl Engine {
         ply: i32,
         pv: bool,
         bounds: SearchBounds,
+        allow_research: bool,
         first_move: bool,
         context: &mut SearchContext,
     ) -> Option<i32> {
@@ -680,16 +686,16 @@ impl Engine {
 
         context.history.push(next_board.hash());
         let child = if first_move {
-            self.minimax(&next_board, depth, ply, pv, -bounds, context)
+            self.minimax(&next_board, depth, ply, pv, false, -bounds, context)
         } else {
             let null_bounds = SearchBounds {
                 alpha: bounds.alpha,
                 beta: bounds.alpha + 1,
             };
 
-            match self.minimax(&next_board, depth, ply, false, -null_bounds, context) {
-                Some(score) if -score > bounds.alpha && -score < bounds.beta => {
-                    self.minimax(&next_board, depth, ply, pv, -bounds, context)
+            match self.minimax(&next_board, depth, ply, false, false, -null_bounds, context) {
+                Some(score) if -score > bounds.alpha && -score < bounds.beta && allow_research => {
+                    self.minimax(&next_board, depth, ply, pv, false, -bounds, context)
                 }
                 child => child,
             }
@@ -706,6 +712,7 @@ impl Engine {
         depth: i32,
         ply: i32,
         pv: bool,
+        null_position: bool,
         mut bounds: SearchBounds,
         context: &mut SearchContext,
     ) -> Option<i32> {
@@ -727,6 +734,10 @@ impl Engine {
             } else {
                 return Some(terminal_score(board, ply));
             }
+        }
+
+        if !board.generate_moves(|_| true) {
+            return Some(terminal_score(board, ply));
         }
 
         let original_bounds = bounds;
@@ -753,32 +764,46 @@ impl Engine {
             }
         }
 
-        let moves = self.generate_moves(board, tt_move);
-
-        if moves.is_empty() {
-            return Some(terminal_score(board, ply));
-        }
-
         let in_check = !board.checkers().is_empty();
         let static_eval = self.nnue.evaluate(board.side_to_move());
 
-        // let rfp_margin = 256 * depth;
-        // if !in_check && !pv && static_eval - rfp_margin >= bounds.beta {
+        // let rfp_margin = 350 * depth;
+        // if !in_check && !pv && depth <= 5 && static_eval - rfp_margin >= bounds.beta {
         //     return Some(static_eval);
         // }
 
-        if !in_check && !pv {
+        if !in_check && 
+           !pv && 
+           !null_position && 
+           static_eval >= bounds.beta && 
+           depth >= 3 && 
+           board.halfmove_clock() <= 95 && 
+           (board.colors(board.side_to_move()) & !(board.pieces(Piece::Pawn) | board.pieces(Piece::King))).len() >= 1
+        {
             let r = 3; // depth reduction apparently
-            let new_board = board.null_move().unwrap();
+            let mut new_board = board.null_move().unwrap();
+            new_board.set_halfmove_clock(new_board.halfmove_clock() - 1);
 
-            let null_bounds = SearchBounds{alpha: -bounds.beta, beta: -bounds.beta+1};
-            let score = self.minimax(&new_board, depth-r, ply, false, null_bounds, context);
+            let null_bounds = SearchBounds {
+                alpha: -bounds.beta,
+                beta: -bounds.beta + 1,
+            };
+            let score = -self.minimax(
+                &new_board,
+                depth - r,
+                ply,
+                false,
+                true,
+                null_bounds,
+                context,
+            )?;
 
-            if score.is_some() && -score.unwrap() >= bounds.beta {
-                return Some(-score.unwrap());
+            if score >= bounds.beta {
+                return Some(score);
             };
         }
 
+        let moves = self.generate_moves(board, tt_move);
         let stm_index = if board.side_to_move() == White { 0 } else { 1 };
         let mut picker = MovePicker::new(moves, stm_index);
 
@@ -786,17 +811,42 @@ impl Engine {
         let mut best_move: Option<EngineMove> = None;
         let mut first_move = true;
 
+        // let mut moves_played = 0;
         while let Some(mv) = picker.next(&self.history) {
-            let x = self.search_move(
+            // moves_played += 1;
+
+            let lmr_depth = 0;
+            // let lmr_depth = if depth <= 3 || first_move || mv.is_capture || mv.promotion || in_check {
+            //     0
+            // } else {
+            //     (0.99 + (depth as f32).ln() * (moves_played as f32).ln() / 3.14) as i32
+            // };
+
+            let mut x = self.search_move(
                 board,
                 mv,
-                depth - 1,
+                depth - 1 - lmr_depth,
                 ply + 1,
                 pv,
                 bounds,
+                lmr_depth == 0,
                 first_move,
                 context,
             )?;
+
+            if lmr_depth > 0 && x > bounds.alpha {
+                x = self.search_move(
+                    board,
+                    mv,
+                    depth - 1,
+                    ply + 1,
+                    pv,
+                    bounds,
+                    true,
+                    first_move,
+                    context,
+                )?;
+            }
 
             if x > result {
                 result = x;
@@ -870,8 +920,17 @@ impl Engine {
         let mut picker = MovePicker::new(root_moves.clone(), stm_index);
         let mut first_move = true;
         while let Some(mv) = picker.next(&self.history) {
-            let score =
-                self.search_move(board, mv, depth - 1, 1, true, bounds, first_move, context)?;
+            let score = self.search_move(
+                board,
+                mv,
+                depth - 1,
+                1,
+                true,
+                bounds,
+                true,
+                first_move,
+                context,
+            )?;
 
             if score > best_score {
                 best_score = score;
@@ -895,7 +954,7 @@ impl Engine {
     where
         F: FnMut(SearchInfo),
     {
-        let mut root_moves = self.generate_moves(&request.board, None);
+        let mut root_moves: MoveList = self.generate_moves(&request.board, None);
 
         self.history = [[[0; 64]; 64]; 2];
         self.tt.clear();

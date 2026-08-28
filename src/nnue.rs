@@ -9,15 +9,17 @@ use cozy_chess::{
 use crate::engine::EngineMove;
 
 const INPUT_SIZE: usize = 768;
-const HIDDEN_SIZE: usize = 16;
+const HIDDEN_SIZE: usize = 64;
+const OUTPUT_INPUT_SIZE: usize = 2 * HIDDEN_SIZE;
 const QA: i32 = 255;
 const QB: i32 = 64;
 const EVAL_SCALE: i32 = 400;
-const NETWORK_PAYLOAD_SIZE: usize = (INPUT_SIZE * HIDDEN_SIZE + HIDDEN_SIZE + HIDDEN_SIZE + 1) * 2;
-const NETWORK_FILE_SIZE: usize = 24_704;
+const NETWORK_PAYLOAD_SIZE: usize =
+    (INPUT_SIZE * HIDDEN_SIZE + HIDDEN_SIZE + OUTPUT_INPUT_SIZE + 1) * 2;
+const NETWORK_FILE_SIZE: usize = 98_752;
 
 const NETWORK_BYTES: &[u8; NETWORK_FILE_SIZE] = include_bytes!(
-    "/home/david/Development/chessbot/datagen/chessbot-selfplay-100m-5k-100m-checkpoints/chessbot-768-16-1-selfplay-100m-5k-100m-100/quantised.bin"
+    "/home/david/Development/chessbot/datagen/chessbot-768-64x2-1-current-100m-10k-wdl016-checkpoints/chessbot-768-64x2-1-current-100m-10k-wdl016-100/quantised.bin"
 );
 const NETWORK: Network = Network::from_bytes(NETWORK_BYTES);
 
@@ -25,7 +27,7 @@ const NETWORK: Network = Network::from_bytes(NETWORK_BYTES);
 struct Network {
     feature_weights: [[i16; HIDDEN_SIZE]; INPUT_SIZE],
     feature_bias: [i16; HIDDEN_SIZE],
-    output_weights: [i16; HIDDEN_SIZE],
+    output_weights: [i16; OUTPUT_INPUT_SIZE],
     output_bias: i16,
 }
 
@@ -54,9 +56,9 @@ impl Network {
             hidden += 1;
         }
 
-        let mut output_weights = [0; HIDDEN_SIZE];
+        let mut output_weights = [0; OUTPUT_INPUT_SIZE];
         hidden = 0;
-        while hidden < HIDDEN_SIZE {
+        while hidden < OUTPUT_INPUT_SIZE {
             output_weights[hidden] = read_i16(bytes, offset);
             offset += 2;
             hidden += 1;
@@ -75,11 +77,14 @@ impl Network {
     }
 
     #[inline(always)]
-    fn evaluate(&self, accumulator: &Accumulator) -> i32 {
+    fn evaluate(&self, us: &Accumulator, them: &Accumulator) -> i32 {
         let mut output = 0;
         for hidden in 0..HIDDEN_SIZE {
-            let value = i32::from(accumulator.values[hidden]).clamp(0, QA);
-            output += value * value * i32::from(self.output_weights[hidden]);
+            let us_value = i32::from(us.values[hidden]).clamp(0, QA);
+            let them_value = i32::from(them.values[hidden]).clamp(0, QA);
+            output += us_value * us_value * i32::from(self.output_weights[hidden]);
+            output +=
+                them_value * them_value * i32::from(self.output_weights[HIDDEN_SIZE + hidden]);
         }
 
         output /= QA;
@@ -92,10 +97,10 @@ const fn read_i16(bytes: &[u8; NETWORK_FILE_SIZE], offset: usize) -> i16 {
     i16::from_le_bytes([bytes[offset], bytes[offset + 1]])
 }
 
-const fn output_abs_sum(weights: &[i16; HIDDEN_SIZE]) -> i64 {
+const fn output_abs_sum(weights: &[i16; OUTPUT_INPUT_SIZE]) -> i64 {
     let mut sum = 0;
     let mut hidden = 0;
-    while hidden < HIDDEN_SIZE {
+    while hidden < OUTPUT_INPUT_SIZE {
         sum += weights[hidden].unsigned_abs() as i64;
         hidden += 1;
     }
@@ -163,7 +168,10 @@ impl NnueState {
 
     #[inline(always)]
     pub fn evaluate(&self, side_to_move: Color) -> i32 {
-        NETWORK.evaluate(&self.accumulators[color_index(side_to_move)])
+        NETWORK.evaluate(
+            &self.accumulators[color_index(side_to_move)],
+            &self.accumulators[color_index(!side_to_move)],
+        )
     }
 
     #[inline(always)]

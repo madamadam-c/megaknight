@@ -21,7 +21,7 @@ fn assert_incremental_move(fen: &str, move_text: &str) {
 
 #[test]
 fn state_is_two_cache_line_sized_accumulators() {
-    assert_eq!(std::mem::size_of::<NnueState>(), 64);
+    assert_eq!(std::mem::size_of::<NnueState>(), 256);
     assert_eq!(std::mem::align_of::<NnueState>(), 32);
 }
 
@@ -89,17 +89,17 @@ fn state_keeps_a_distinct_accumulator_for_each_perspective() {
     assert_ne!(state.accumulators[0], state.accumulators[1]);
     assert_eq!(
         state.evaluate(White),
-        NETWORK.evaluate(&state.accumulators[0])
+        NETWORK.evaluate(&state.accumulators[0], &state.accumulators[1])
     );
     assert_eq!(
         state.evaluate(Black),
-        NETWORK.evaluate(&state.accumulators[1])
+        NETWORK.evaluate(&state.accumulators[1], &state.accumulators[0])
     );
 }
 
 #[test]
 fn startpos_evaluation_is_bit_stable() {
     let state = NnueState::from_board(&Board::default());
-    assert_eq!(state.evaluate(White), 0);
-    assert_eq!(state.evaluate(Black), 0);
+    assert_eq!(state.evaluate(White), 44);
+    assert_eq!(state.evaluate(Black), 44);
 }

@@ -89,9 +89,9 @@
     },
     "engines": [
         {
-            "name": "nmp",
+            "name": "64HL",
             "dir": "",
-            "cmd": "/home/david/Development/chessbot/models/nmp",
+            "cmd": "/home/david/Development/chessbot/models/64HL",
             "args": "",
             "restart": false,
             "options": [],
@@ -109,9 +109,9 @@
             "variant": 0
         },
         {
-            "name": "postnnue100mv3",
+            "name": "fixseeprune",
             "dir": "",
-            "cmd": "/home/david/Development/chessbot/models/postnnue100mv3",
+            "cmd": "/home/david/Development/chessbot/models/fixseeprune",
             "args": "",
             "restart": false,
             "options": [],
@@ -130,16 +130,16 @@
         }
     ],
     "stats": {
-        "nmp vs postnnue100mv3": {
-            "wins": 146,
-            "losses": 47,
-            "draws": 69,
-            "penta_WW": 39,
-            "penta_WD": 40,
-            "penta_WL": 28,
-            "penta_DD": 8,
-            "penta_LD": 13,
-            "penta_LL": 3
+        "64HL vs fixseeprune": {
+            "wins": 147,
+            "losses": 57,
+            "draws": 84,
+            "penta_WW": 33,
+            "penta_WD": 45,
+            "penta_WL": 36,
+            "penta_DD": 11,
+            "penta_LD": 17,
+            "penta_LL": 2
         }
     }
 }
