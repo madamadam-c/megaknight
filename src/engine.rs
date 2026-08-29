@@ -10,9 +10,7 @@ use cozy_chess::{
 };
 
 use crate::{
-    evaluate::{static_exchange_evaluation, value},
-    nnue::NnueState,
-    transposition::{
+    evaluate::{static_exchange_evaluation, value}, history::{CaptureHistory, ContinuationHistory, MAX_HISTORY, QuietHistory, history_bonus}, nnue::NnueState, transposition::{
         NodeType::{EXACT, LOWER, UPPER},
         Table, TableEntry,
     },
@@ -345,16 +343,6 @@ impl std::ops::Index<usize> for MoveList {
     }
 }
 
-const MAX_HISTORY: i32 = 16_384;
-fn update_history(value: &mut i32, bonus: i32) {
-    let bonus = bonus.clamp(-MAX_HISTORY, MAX_HISTORY);
-    *value += bonus - *value * bonus.abs() / MAX_HISTORY;
-}
-
-fn history_bonus(depth: i32) -> i32 {
-    depth.saturating_mul(depth)
-}
-
 #[derive(Clone, Copy, PartialEq)]
 enum Stage {
     TtMove,
@@ -374,6 +362,7 @@ struct MovePicker {
     good_captures: Vec<EngineMove>,
     quiets: Vec<EngineMove>,
     bad_captures: Vec<EngineMove>,
+    tried_captures: Vec<EngineMove>,
     stm_index: usize,
     quiet_remaining: usize,
 }
@@ -436,12 +425,15 @@ impl MovePicker {
             good_captures: moves.good_captures,
             quiets: moves.quiets,
             bad_captures: moves.bad_captures,
+            tried_captures: Vec::with_capacity(8),
             stm_index,
             quiet_remaining,
         }
     }
 
     fn next(&mut self, context: &SearchContext, engine: &Engine) -> Option<EngineMove> {
+        let stm = self.stm_index;
+
         loop {
             match self.stage {
                 Stage::TtMove => {
@@ -455,38 +447,31 @@ impl MovePicker {
                         if mv.is_tt {
                             i32::MAX
                         } else {
-                            mv.see_score as i32
+                            (mv.see_score as i32) * 64 
+                            // + engine.capture_history[stm][mv.piece_type as usize][mv.mv.to as usize][mv.target_type.unwrap() as usize]
                         }
                     }) {
+                        self.tried_captures.push(mv);
                         return Some(mv);
                     }
                     self.stage = Stage::Quiets;
                 }
                 Stage::Quiets => {
-                    let stm = self.stm_index;
-                    // let mut previous_moves = context
+                    // let previous_moves = context
                     //     .move_stack
                     //     .iter()
                     //     .rev()
                     //     .map_while(|previous| Some((previous.piece?, previous.mv?.to)))
                     //     .fuse();
 
-                    // let continuation: [Option<&[[i32; 64]; 6]>; CONTHIST_PLY] =
-                    // array::from_fn(|distance| {
-                    //     let (piece, to) = previous_moves.next()?;
-                    //     Some(&engine.continuation_history[stm][piece as usize][to as usize][distance],)
-                    // });
-                    
                     let mv = pick_max_prefix(&mut self.quiets, self.quiet_remaining, |mv| {
                         if mv.promotion {
                             mv.material_value + 8*MAX_HISTORY
                         } else {
-                            let mut res = engine.quiet_history[stm][mv.mv.from as usize][mv.mv.to as usize];
+                            let mut res = engine.quiet_history.get(stm, mv.mv.from, mv.mv.to);
 
-                            // for (distance, continuation) in continuation.iter().enumerate() {
-                            //     if let Some(history) = continuation {
-                            //         res +=  history[mv.piece_type as usize][mv.mv.to as usize];
-                            //     }
+                            // for (distance, pmv) in previous_moves.clone().enumerate() {
+                            //     res += engine.continuation_history.get(distance, stm, pmv.1, pmv.0, mv.mv.to, mv.piece_type);
                             // }
 
                             return res;
@@ -499,7 +484,11 @@ impl MovePicker {
                     self.stage = Stage::BadCaptures;
                 }
                 Stage::BadCaptures => {
-                    if let Some(mv) = pick_max(&mut self.bad_captures, |mv| mv.see_score as i32) {
+                    if let Some(mv) = pick_max(&mut self.bad_captures, |mv| 
+                        mv.see_score as i32 * 64
+                            // + engine.capture_history[stm][mv.piece_type as usize][mv.mv.to as usize][mv.target_type.unwrap() as usize]
+                        ) {
+                        self.tried_captures.push(mv);
                         return Some(mv);
                     }
                     self.stage = Stage::Done;
@@ -515,13 +504,12 @@ impl MovePicker {
     }
 }
 
-const CONTHIST_PLY: usize = 3;
-type MovePair = [[[[[i32; 64]; 6]; CONTHIST_PLY]; 64]; 6];
 pub struct Engine {
     tt: Table,
     nnue: NnueState,
-    quiet_history: [[[i32; 64]; 64]; 2],
-    continuation_history: [Box<MovePair>; 2]
+    quiet_history: QuietHistory,
+    continuation_history: ContinuationHistory,
+    capture_history: CaptureHistory
 }
 
 impl Engine {
@@ -529,8 +517,9 @@ impl Engine {
         Self {
             tt: Table::new_for_mb(16),
             nnue: NnueState::default(),
-            quiet_history: [[[0; 64]; 64]; 2],
-            continuation_history: array::from_fn(|_| {Box::new([[[[[0i32; 64]; 6]; CONTHIST_PLY]; 64]; 6])})
+            quiet_history: QuietHistory::new(),
+            continuation_history: ContinuationHistory::new(),
+            capture_history: CaptureHistory::new()
         }
     }
 
@@ -800,6 +789,11 @@ impl Engine {
         let in_check = !board.checkers().is_empty();
         let static_eval = self.nnue.evaluate(board.side_to_move());
 
+        // let razoring_margin = 163 + 41 * depth * depth;
+        // if !in_check && !pv && static_eval + razoring_margin < bounds.alpha {
+        //     return Some(static_eval);
+        // }
+
         let rfp_margin = 123 * depth;
         if !in_check && !pv && depth <= 5 && static_eval - rfp_margin >= bounds.beta {
             return Some(static_eval);
@@ -900,18 +894,11 @@ impl Engine {
 
             if x >= bounds.beta {
                 if !mv.is_capture && !mv.promotion {
-                    update_history(
-                        &mut self.quiet_history[board.side_to_move() as usize][mv.mv.from as usize][mv.mv.to as usize],
-                        history_bonus(depth),
-                    );
+                    self.quiet_history.update(stm_index, mv.mv.from, mv.mv.to, history_bonus(depth));
 
                     for mv2 in picker.tried_quiets() {
                         if mv2.mv != mv.mv {
-                            update_history(
-                                &mut self.quiet_history[stm_index][mv2.mv.from as usize]
-                                    [mv2.mv.to as usize],
-                                -history_bonus(depth) / 4,
-                            );
+                            self.quiet_history.update(stm_index,mv2.mv.from, mv2.mv.to, -history_bonus(depth) / 4);
                         }
                     }
 
@@ -938,7 +925,22 @@ impl Engine {
                     //     }
                     // }
 
-                }
+                } 
+                // else if mv.is_capture {
+                //     update_history(
+                //         &mut self.capture_history[stm_index][mv.piece_type as usize][mv.mv.to as usize][mv.target_type.unwrap() as usize], 
+                //         history_bonus(depth)
+                //     );
+
+                //     for mv2 in picker.tried_captures {
+                //         if mv2.mv == mv.mv {break;}
+
+                //         update_history(
+                //             &mut self.capture_history[stm_index][mv2.piece_type as usize][mv2.mv.to as usize][mv2.target_type.unwrap() as usize], 
+                //             -history_bonus(depth)/4
+                //         );
+                //     }
+                // }
                 break;
             }
 
@@ -1022,8 +1024,9 @@ impl Engine {
     {
         let mut root_moves: MoveList = self.generate_moves(&request.board, None);
 
-        self.quiet_history = [[[0; 64]; 64]; 2];
-        self.continuation_history = array::from_fn(|_| {Box::new([[[[[0i32; 64]; 6]; CONTHIST_PLY]; 64]; 6])});
+        self.quiet_history.clear();
+        self.continuation_history.clear();
+        self.capture_history.clear();
         self.tt.clear();
         self.nnue = NnueState::from_board(&request.board);
 

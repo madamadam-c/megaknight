@@ -31,6 +31,10 @@ pub fn static_exchange_evaluation(board: &Board, mv: &EngineMove) -> i16 {
     let mut blocked_squares = board.occupied();
     blocked_squares ^= mv.mv.from.bitboard();
 
+    if !mv.is_capture {
+        blocked_squares ^= mv.mv.to.bitboard();
+    }
+
     if mv.is_ep {
         if colour == White {
             blocked_squares ^= Square::new(square.file(), Rank::Fourth).bitboard();

@@ -21,6 +21,7 @@ mod evaluate;
 mod nnue;
 mod selfplay;
 mod transposition;
+mod history;
 
 #[cfg(test)]
 mod tests;
