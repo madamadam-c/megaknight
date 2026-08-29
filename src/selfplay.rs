@@ -22,7 +22,8 @@ use crate::engine::{Engine, SearchLimits, SearchRequest};
 type AnyError = Box<dyn Error + Send + Sync>;
 
 const DEFAULT_OUTPUT: &str = "datagen/selfplay.txt";
-const DEFAULT_OPENINGS: &str = "materials/fastchess/books/popularpos_lichess_v3.epd";
+const DEFAULT_OPENINGS: &str =
+    "materials/fastchess/books/UHO_Lichess_4852_v1_noob_4moves_dedup.epd";
 const DEFAULT_NODES: u64 = 1_000;
 const DEFAULT_HASH_MB: u64 = 4;
 const DEFAULT_MAX_PLIES: usize = 400;
@@ -37,7 +38,7 @@ Usage: chessbot selfplay --positions N [options]
 
 Options:
   --output PATH         Bullet text output (default: datagen/selfplay.txt)
-  --openings PATH       Opening EPD file (default: popularpos_lichess_v3.epd)
+  --openings PATH       Opening EPD file (default: UHO + noob 4-move dedup)
   --positions N         Number of output positions (required)
   --nodes N             Search nodes per move (default: 1000)
   --threads N           Parallel games (default: available CPUs)
@@ -240,7 +241,9 @@ where
 }
 
 fn run(config: SelfplayConfig) -> Result<(), AnyError> {
-    let openings = Arc::new(load_openings(&config.openings)?);
+    let mut openings = load_openings(&config.openings)?;
+    shuffle(&mut openings, config.seed);
+    let openings = Arc::new(openings);
     let partial = partial_path(&config.output);
     prepare_output(&config.output, &partial, config.overwrite)?;
     let output = OpenOptions::new()
@@ -381,7 +384,7 @@ fn worker_loop(
     while !cancelled.load(Ordering::Relaxed) {
         let game_id = next_game.fetch_add(1, Ordering::Relaxed);
         let mut rng = SplitMix64::new(config.seed ^ game_id.wrapping_mul(0x9e37_79b9_7f4a_7c15));
-        let opening_index = rng.next_u64() as usize % openings.len();
+        let opening_index = (game_id % openings.len() as u64) as usize;
         let mut board = openings[opening_index].clone();
         randomize_opening(&mut board, config.random_plies, &mut rng);
 
@@ -431,6 +434,7 @@ fn play_game(
     config: &SelfplayConfig,
     cancelled: &Arc<AtomicBool>,
 ) -> Option<GameResult> {
+    engine.new_game();
     let mut positions = Vec::new();
     let mut emitted = HashSet::new();
     let mut history = vec![board.hash()];
@@ -555,6 +559,14 @@ fn randomize_opening(board: &mut Board, plies: usize, rng: &mut SplitMix64) {
         }
         let mv = quiets[rng.next_u64() as usize % quiets.len()];
         board.play_unchecked(mv);
+    }
+}
+
+fn shuffle<T>(values: &mut [T], seed: u64) {
+    let mut rng = SplitMix64::new(seed);
+    for end in (1..values.len()).rev() {
+        let index = rng.next_u64() as usize % (end + 1);
+        values.swap(end, index);
     }
 }
 

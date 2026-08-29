@@ -10,9 +10,8 @@ use cozy_chess::{
 };
 
 use crate::{
-    evaluate::{static_exchange_evaluation, value}, history::{CaptureHistory, ContinuationHistory, MAX_HISTORY, QuietHistory, history_bonus}, nnue::NnueState, transposition::{
-        NodeType::{EXACT, LOWER, UPPER},
-        Table, TableEntry,
+    evaluate::{static_exchange_evaluation, value}, history::{CaptureHistory, ContinuationHistory, MAX_QUIET_HISTORY, PawnCorrectionHistory, QuietHistory, history_bonus}, nnue::NnueState, transposition::{
+        NodeType::{self, EXACT, LOWER, UPPER}, Table, TableEntry,
     },
 };
 
@@ -466,7 +465,7 @@ impl MovePicker {
 
                     let mv = pick_max_prefix(&mut self.quiets, self.quiet_remaining, |mv| {
                         if mv.promotion {
-                            mv.material_value + 8*MAX_HISTORY
+                            mv.material_value + 8*MAX_QUIET_HISTORY
                         } else {
                             let mut res = engine.quiet_history.get(stm, mv.mv.from, mv.mv.to);
 
@@ -509,7 +508,8 @@ pub struct Engine {
     nnue: NnueState,
     quiet_history: QuietHistory,
     continuation_history: ContinuationHistory,
-    capture_history: CaptureHistory
+    capture_history: CaptureHistory,
+    pawn_correction_history: PawnCorrectionHistory
 }
 
 impl Engine {
@@ -519,14 +519,25 @@ impl Engine {
             nnue: NnueState::default(),
             quiet_history: QuietHistory::new(),
             continuation_history: ContinuationHistory::new(),
-            capture_history: CaptureHistory::new()
+            capture_history: CaptureHistory::new(),
+            pawn_correction_history: PawnCorrectionHistory::new()
         }
     }
 
-    pub fn new_game(&mut self) {}
+    pub fn new_game(&mut self) {
+        self.pawn_correction_history.clear();
+        self.tt.clear();
+    }
 
     pub fn set_hash_size_mb(&mut self, megabytes: u64) {
         self.tt = Table::new_for_mb(megabytes);
+    }
+
+    pub fn get_static_eval(&self, board: &Board) -> i32 {
+        let mut static_eval = self.nnue.evaluate(board.side_to_move());
+        // let hash = board.pawn_hash(board.side_to_move()) ^ board.pawn_hash(!board.side_to_move());
+        // static_eval += 128 * self.pawn_correction_history.get(board.side_to_move() as usize, hash) / 1024;
+        return static_eval;
     }
 
     fn generate_moves(&self, board: &Board, tt_move: Option<Move>) -> MoveList {
@@ -619,7 +630,7 @@ impl Engine {
 
         let in_check = !board.checkers().is_empty();
 
-        let static_eval = self.nnue.evaluate(board.side_to_move());
+        let static_eval = self.get_static_eval(board);
         if !in_check {
             if static_eval >= bounds.beta {
                 if board.generate_moves(|_| true) {
@@ -787,7 +798,7 @@ impl Engine {
         }
 
         let in_check = !board.checkers().is_empty();
-        let static_eval = self.nnue.evaluate(board.side_to_move());
+        let static_eval = self.get_static_eval(board);
 
         // let razoring_margin = 163 + 41 * depth * depth;
         // if !in_check && !pv && static_eval + razoring_margin < bounds.alpha {
@@ -957,6 +968,16 @@ impl Engine {
             }
         };
 
+        // update correction histories
+        // if !in_check && best_move.is_none_or(|mv| !mv.is_capture && !mv.promotion) &&
+        //     !(node_type == NodeType::LOWER && result <= static_eval) && !(node_type == NodeType::UPPER && result >= static_eval)
+        //     && result.abs() <= 95_000
+        // {
+        //     let bonus = (result - static_eval) * depth / 8;
+        //     let hash = board.pawn_hash(board.side_to_move()) ^ board.pawn_hash(!board.side_to_move());
+        //     self.pawn_correction_history.update(stm_index, hash, bonus);
+        // }
+
         self.tt.insert(
             key,
             TableEntry {
@@ -1022,13 +1043,18 @@ impl Engine {
     where
         F: FnMut(SearchInfo),
     {
-        let mut root_moves: MoveList = self.generate_moves(&request.board, None);
-
         self.quiet_history.clear();
         self.continuation_history.clear();
         self.capture_history.clear();
-        self.tt.clear();
         self.nnue = NnueState::from_board(&request.board);
+
+        let root_key = request.board.hash();
+        let root_tt_move = self
+            .tt
+            .get(root_key)
+            .and_then(|entry| entry.best_move)
+            .filter(|&mv| request.board.is_legal(mv));
+        let mut root_moves: MoveList = self.generate_moves(&request.board, root_tt_move);
 
         if root_moves.is_empty() {
             return SearchResult { best_move: None };
@@ -1042,7 +1068,7 @@ impl Engine {
             request.limits.clone(),
             Arc::clone(&request.stop),
         );
-        let mut completed_move = None;
+        let mut completed_move = root_tt_move;
         let mut depth = 1;
 
         while depth <= max_depth {
@@ -1070,6 +1096,18 @@ impl Engine {
             };
 
             completed_move = Some(best_move);
+            if request.limits.searchmoves.is_empty() {
+                self.tt.insert(
+                    root_key,
+                    TableEntry {
+                        key: root_key,
+                        score: score_to_tt(score, 0),
+                        depth,
+                        node_type: EXACT,
+                        best_move: Some(best_move),
+                    },
+                );
+            }
 
             report(SearchInfo {
                 depth,

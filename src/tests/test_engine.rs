@@ -159,18 +159,18 @@ fn history_bonus_scales_with_depth_without_an_early_cap() {
 #[test]
 fn history_update_applies_gravity_and_stays_bounded() {
     let mut value = 0;
-    update_history(&mut value, MAX_HISTORY / 2);
-    assert_eq!(value, MAX_HISTORY / 2);
+    update_history(&mut value, MAX_QUIET_HISTORY / 2);
+    assert_eq!(value, MAX_QUIET_HISTORY / 2);
 
-    update_history(&mut value, MAX_HISTORY / 2);
-    assert_eq!(value, MAX_HISTORY * 3 / 4);
+    update_history(&mut value, MAX_QUIET_HISTORY / 2);
+    assert_eq!(value, MAX_QUIET_HISTORY * 3 / 4);
 
     update_history(&mut value, i32::MAX);
-    assert_eq!(value, MAX_HISTORY);
+    assert_eq!(value, MAX_QUIET_HISTORY);
 
     let mut negative = 0;
     update_history(&mut negative, i32::MIN);
-    assert_eq!(negative, -MAX_HISTORY);
+    assert_eq!(negative, -MAX_QUIET_HISTORY);
 }
 
 #[test]
@@ -184,7 +184,7 @@ fn history_orders_quiets_for_the_side_to_move() {
     };
 
     engine.quiet_history[0][Square::E2 as usize][Square::E4 as usize] = 1;
-    engine.quiet_history[1][Square::D2 as usize][Square::D4 as usize] = MAX_HISTORY;
+    engine.quiet_history[1][Square::D2 as usize][Square::D4 as usize] = MAX_QUIET_HISTORY;
 
     let moves = engine.generate_moves(&board, None);
     let mut picker = MovePicker::new(moves, 0);
@@ -196,7 +196,7 @@ fn history_orders_quiets_for_the_side_to_move() {
 fn quiet_promotions_are_ordered_before_maximum_history_quiets() {
     let board = board("7k/P7/8/8/8/8/8/7K w - - 0 1");
     let mut engine = Engine::new();
-    engine.quiet_history[0] = [[MAX_HISTORY; 64]; 64];
+    engine.quiet_history[0] = [[MAX_QUIET_HISTORY; 64]; 64];
 
     let moves = engine.generate_moves(&board, None);
     let mut picker = MovePicker::new(moves, 0);

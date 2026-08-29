@@ -89,9 +89,9 @@
     },
     "engines": [
         {
-            "name": "128HL",
+            "name": "ttbuckets",
             "dir": "",
-            "cmd": "/home/david/Development/chessbot/models/128HL",
+            "cmd": "/home/david/Development/chessbot/models/ttbuckets",
             "args": "",
             "restart": false,
             "options": [],
@@ -109,9 +109,9 @@
             "variant": 0
         },
         {
-            "name": "lmp",
+            "name": "150mdata",
             "dir": "",
-            "cmd": "/home/david/Development/chessbot/models/lmp",
+            "cmd": "/home/david/Development/chessbot/models/150mdata",
             "args": "",
             "restart": false,
             "options": [],
@@ -130,16 +130,16 @@
         }
     ],
     "stats": {
-        "128HL vs lmp": {
-            "wins": 18,
-            "losses": 18,
-            "draws": 16,
-            "penta_WW": 5,
-            "penta_WD": 5,
-            "penta_WL": 3,
-            "penta_DD": 4,
-            "penta_LD": 3,
-            "penta_LL": 6
+        "ttbuckets vs 150mdata": {
+            "wins": 348,
+            "losses": 257,
+            "draws": 479,
+            "penta_WW": 55,
+            "penta_WD": 162,
+            "penta_WL": 76,
+            "penta_DD": 100,
+            "penta_LD": 117,
+            "penta_LL": 32
         }
     }
 }

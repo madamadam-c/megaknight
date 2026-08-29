@@ -72,6 +72,19 @@ fn random_opening_moves_are_reproducible_and_legal() {
 }
 
 #[test]
+fn opening_shuffle_is_reproducible_and_preserves_every_entry() {
+    let mut first = (0..100).collect::<Vec<_>>();
+    let mut second = first.clone();
+
+    shuffle(&mut first, 42);
+    shuffle(&mut second, 42);
+
+    assert_eq!(first, second);
+    first.sort_unstable();
+    assert_eq!(first, (0..100).collect::<Vec<_>>());
+}
+
+#[test]
 fn nnue_selfplay_produces_valid_bullet_records() {
     let mut engine = Engine::new();
     let config = SelfplayConfig {

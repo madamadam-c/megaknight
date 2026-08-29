@@ -19,7 +19,7 @@ const NETWORK_PAYLOAD_SIZE: usize =
 const NETWORK_FILE_SIZE: usize = 98_752;
 
 const NETWORK_BYTES: &[u8; NETWORK_FILE_SIZE] = include_bytes!(
-    "/home/david/Development/chessbot/datagen/chessbot-768-64x2-1-current-100m-10k-wdl016-checkpoints/chessbot-768-64x2-1-current-100m-10k-wdl016-100/quantised.bin"
+    "/home/david/Development/chessbot/datagen/chessbot-768-64x2-1-rfp-lmr-150m-10k-wdl016-sb200-checkpoints/chessbot-768-64x2-1-rfp-lmr-150m-10k-wdl016-sb200-200/quantised.bin"
 );
 const NETWORK: Network = Network::from_bytes(NETWORK_BYTES);
 
