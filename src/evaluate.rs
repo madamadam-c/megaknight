@@ -1,7 +1,11 @@
 use std::cmp::max;
 
 use cozy_chess::{
-    Board, Color::{Black, White}, Piece::{self, *}, Rank, Square, get_bishop_moves, get_king_moves, get_knight_moves, get_line_rays, get_pawn_attacks, get_rook_moves,
+    Board,
+    Color::{Black, White},
+    Piece::{self, *},
+    Rank, Square, get_bishop_moves, get_king_moves, get_knight_moves, get_line_rays,
+    get_pawn_attacks, get_rook_moves,
 };
 
 use crate::engine::EngineMove;
@@ -64,7 +68,10 @@ pub fn static_exchange_evaluation(board: &Board, mv: &EngineMove) -> i16 {
         Some(mv.piece_type)
     };
 
-    let rays = [get_line_rays(board.king(White), square), get_line_rays(board.king(Black), square)];
+    let rays = [
+        get_line_rays(board.king(White), square),
+        get_line_rays(board.king(Black), square),
+    ];
 
     loop {
         let mut found = false;

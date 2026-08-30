@@ -509,7 +509,7 @@ pub struct Engine {
     quiet_history: QuietHistory,
     continuation_history: ContinuationHistory,
     capture_history: CaptureHistory,
-    pawn_correction_history: PawnCorrectionHistory
+    pawn_correction_history: PawnCorrectionHistory,
 }
 
 impl Engine {
@@ -520,7 +520,7 @@ impl Engine {
             quiet_history: QuietHistory::new(),
             continuation_history: ContinuationHistory::new(),
             capture_history: CaptureHistory::new(),
-            pawn_correction_history: PawnCorrectionHistory::new()
+            pawn_correction_history: PawnCorrectionHistory::new(),
         }
     }
 
@@ -533,11 +533,12 @@ impl Engine {
         self.tt = Table::new_for_mb(megabytes);
     }
 
-    pub fn get_static_eval(&self, board: &Board) -> i32 {
-        let mut static_eval = self.nnue.evaluate(board.side_to_move());
-        // let hash = board.pawn_hash(board.side_to_move()) ^ board.pawn_hash(!board.side_to_move());
-        // static_eval += 128 * self.pawn_correction_history.get(board.side_to_move() as usize, hash) / 1024;
-        return static_eval;
+    pub fn get_correction_value(&self, board: &Board) -> i32 {
+        let pawn_hash = board.pawn_hash(board.side_to_move()) ^ board.pawn_hash(!board.side_to_move());
+        let correction = 64 * (
+            self.pawn_correction_history.get(board.side_to_move() as usize, pawn_hash) 
+        ) / 1024;
+        return correction;
     }
 
     fn generate_moves(&self, board: &Board, tt_move: Option<Move>) -> MoveList {
@@ -630,7 +631,10 @@ impl Engine {
 
         let in_check = !board.checkers().is_empty();
 
-        let static_eval = self.get_static_eval(board);
+        let mut static_eval = self.nnue.evaluate(board.side_to_move());
+        let correction = self.get_correction_value(board);
+        static_eval += correction;
+
         if !in_check {
             if static_eval >= bounds.beta {
                 if board.generate_moves(|_| true) {
@@ -798,14 +802,16 @@ impl Engine {
         }
 
         let in_check = !board.checkers().is_empty();
-        let static_eval = self.get_static_eval(board);
+        let mut static_eval = self.nnue.evaluate(board.side_to_move());
+        let mut correction = self.get_correction_value(board);
+        static_eval += correction;
 
         // let razoring_margin = 163 + 41 * depth * depth;
         // if !in_check && !pv && static_eval + razoring_margin < bounds.alpha {
         //     return Some(static_eval);
         // }
 
-        let rfp_margin = 123 * depth;
+        let rfp_margin = 123 * depth + correction.abs() / 2;
         if !in_check && !pv && depth <= 5 && static_eval - rfp_margin >= bounds.beta {
             return Some(static_eval);
         }
@@ -866,7 +872,7 @@ impl Engine {
             let lmr_depth = if depth <= 3 || first_move || mv.is_capture || mv.promotion || in_check {
                 0
             } else {
-                (0.99 + (depth as f32).ln() * (moves_played as f32).ln() / 3.14) as i32
+                ((0.99 + (depth as f32).ln() * (moves_played as f32).ln() / 3.14) as i32).max(0)
             };
 
             let mut x = self.search_move(
@@ -969,14 +975,18 @@ impl Engine {
         };
 
         // update correction histories
-        // if !in_check && best_move.is_none_or(|mv| !mv.is_capture && !mv.promotion) &&
-        //     !(node_type == NodeType::LOWER && result <= static_eval) && !(node_type == NodeType::UPPER && result >= static_eval)
-        //     && result.abs() <= 95_000
-        // {
-        //     let bonus = (result - static_eval) * depth / 8;
-        //     let hash = board.pawn_hash(board.side_to_move()) ^ board.pawn_hash(!board.side_to_move());
-        //     self.pawn_correction_history.update(stm_index, hash, bonus);
-        // }
+        static_eval -= correction;
+        correction = self.get_correction_value(board);
+        static_eval += correction;
+
+        if !in_check && best_move.is_none_or(|mv| !mv.is_capture && !mv.promotion) &&
+            !(node_type == NodeType::LOWER && result <= static_eval) && !(node_type == NodeType::UPPER && result >= static_eval)
+            && result.abs() <= 95_000
+        {
+            let bonus = (result - static_eval) * depth / 8;
+            let pawn_hash = board.pawn_hash(board.side_to_move()) ^ board.pawn_hash(!board.side_to_move());
+            self.pawn_correction_history.update(stm_index, pawn_hash, bonus);
+        }
 
         self.tt.insert(
             key,

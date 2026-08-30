@@ -89,6 +89,26 @@
     },
     "engines": [
         {
+            "name": "pawnhist",
+            "dir": "",
+            "cmd": "/home/david/Development/chessbot/models/pawnhist",
+            "args": "",
+            "restart": false,
+            "options": [],
+            "limit": {
+                "tc": {
+                    "increment": 80,
+                    "fixed_time": 0,
+                    "time": 8000,
+                    "moves": 0,
+                    "timemargin": 0
+                },
+                "nodes": 0,
+                "plies": 0
+            },
+            "variant": 0
+        },
+        {
             "name": "ttbuckets",
             "dir": "",
             "cmd": "/home/david/Development/chessbot/models/ttbuckets",
@@ -107,39 +127,19 @@
                 "plies": 0
             },
             "variant": 0
-        },
-        {
-            "name": "150mdata",
-            "dir": "",
-            "cmd": "/home/david/Development/chessbot/models/150mdata",
-            "args": "",
-            "restart": false,
-            "options": [],
-            "limit": {
-                "tc": {
-                    "increment": 80,
-                    "fixed_time": 0,
-                    "time": 8000,
-                    "moves": 0,
-                    "timemargin": 0
-                },
-                "nodes": 0,
-                "plies": 0
-            },
-            "variant": 0
         }
     ],
     "stats": {
-        "ttbuckets vs 150mdata": {
-            "wins": 348,
-            "losses": 257,
-            "draws": 479,
-            "penta_WW": 55,
-            "penta_WD": 162,
-            "penta_WL": 76,
-            "penta_DD": 100,
-            "penta_LD": 117,
-            "penta_LL": 32
+        "pawnhist vs ttbuckets": {
+            "wins": 639,
+            "losses": 543,
+            "draws": 1440,
+            "penta_WW": 84,
+            "penta_WD": 347,
+            "penta_WL": 124,
+            "penta_DD": 399,
+            "penta_LD": 295,
+            "penta_LL": 62
         }
     }
 }
