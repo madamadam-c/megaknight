@@ -91,7 +91,7 @@
         {
             "name": "1",
             "dir": "",
-            "cmd": "/home/david/Development/chessbot/models/aspiration",
+            "cmd": "/home/david/Development/chessbot/models/capsee",
             "args": "",
             "restart": false,
             "options": [
@@ -116,7 +116,7 @@
         {
             "name": "0",
             "dir": "",
-            "cmd": "/home/david/Development/chessbot/models/timman1",
+            "cmd": "/home/david/Development/chessbot/models/cmh",
             "args": "",
             "restart": false,
             "options": [
@@ -141,15 +141,15 @@
     ],
     "stats": {
         "1 vs 0": {
-            "wins": 177,
-            "losses": 100,
-            "draws": 307,
-            "penta_WW": 26,
-            "penta_WD": 94,
-            "penta_WL": 31,
-            "penta_DD": 79,
-            "penta_LD": 55,
-            "penta_LL": 7
+            "wins": 153,
+            "losses": 81,
+            "draws": 250,
+            "penta_WW": 17,
+            "penta_WD": 86,
+            "penta_WL": 33,
+            "penta_DD": 61,
+            "penta_LD": 42,
+            "penta_LL": 3
         }
     }
 }

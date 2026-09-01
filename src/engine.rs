@@ -10,7 +10,7 @@ use cozy_chess::{
 };
 
 use crate::{
-    evaluate::{static_exchange_evaluation, value}, history::{CaptureHistory, ContinuationHistory, MAX_QUIET_HISTORY, CorrectionHistory, QuietHistory, history_bonus}, nnue::NnueState, transposition::{
+    evaluate::{static_exchange_evaluation, value}, history::{CONTHIST_PLY, CaptureHistory, ContinuationHistory, CorrectionHistory, MAX_QUIET_HISTORY, QuietHistory, history_bonus}, nnue::NnueState, transposition::{
         NodeType::{self, EXACT, LOWER, UPPER}, Table, TableEntry,
     },
 };
@@ -49,15 +49,15 @@ pub struct SearchResult {
 }
 #[derive(Copy, Clone)]
 struct StackMove {
-    mv: Option<Move>,
-    piece: Option<Piece>
+    mv: Move,
+    piece: Piece,
+    is_null: bool,
 }
 
 struct SearchContext {
     limits: SearchLimits,
     stop: Arc<AtomicBool>,
     history: Vec<u64>,
-    move_stack: Vec<StackMove>,
     start: Instant,
     soft_deadline: Option<Instant>,
     hard_deadline: Option<Instant>,
@@ -79,7 +79,6 @@ impl SearchContext {
             limits,
             stop,
             history,
-            move_stack: Vec::with_capacity(256),
             start,
             soft_deadline,
             hard_deadline,
@@ -362,10 +361,6 @@ enum Stage {
     Done,
 }
 
-/// Orders moves lazily: instead of fully sorting every list up front, each
-/// `next()` call selects the highest-priority remaining move of the current
-/// stage. Nodes usually cut off after a handful of moves, so most ordering
-/// work never happens.
 struct MovePicker {
     stage: Stage,
     tt_move: Option<EngineMove>,
@@ -373,7 +368,6 @@ struct MovePicker {
     quiets: Vec<EngineMove>,
     bad_captures: Vec<EngineMove>,
     tried_captures: Vec<EngineMove>,
-    stm_index: usize,
     quiet_remaining: usize,
 }
 
@@ -416,7 +410,7 @@ fn pick_max_prefix(
 }
 
 impl MovePicker {
-    fn new(mut moves: MoveList, stm_index: usize) -> Self {
+    fn new(mut moves: MoveList) -> Self {
         let tt_move = moves
             .good_captures
             .iter()
@@ -436,7 +430,6 @@ impl MovePicker {
             quiets: moves.quiets,
             bad_captures: moves.bad_captures,
             tried_captures: Vec::with_capacity(8),
-            stm_index,
             quiet_remaining,
         }
     }
@@ -455,7 +448,9 @@ impl MovePicker {
                         if mv.is_tt {
                             i32::MAX
                         } else {
-                            mv.history
+                            // mv.history
+                            mv.see_score as i32
+                            // 0
                         }
                     }) {
                         self.tried_captures.push(mv);
@@ -479,7 +474,9 @@ impl MovePicker {
                 }
                 Stage::BadCaptures => {
                     if let Some(mv) = pick_max(&mut self.bad_captures, |mv| 
-                        mv.history
+                        mv.see_score as i32
+                        // mv.history
+                        // 0
                         ) {
                         self.tried_captures.push(mv);
                         return Some(mv);
@@ -491,11 +488,15 @@ impl MovePicker {
         }
     }
 
-    /// All quiet moves handed out so far.
     fn tried_quiets(&self) -> &[EngineMove] {
         &self.quiets[self.quiet_remaining..]
     }
 }
+
+const DUMMY_NULL: [StackMove; 2] = [
+    StackMove{mv: Move{from: cozy_chess::Square::A2, to: cozy_chess::Square::A1, promotion: None}, piece: Pawn, is_null: true}, 
+    StackMove{mv: Move{from: cozy_chess::Square::A7, to: cozy_chess::Square::A8, promotion: None}, piece: Pawn, is_null: true}
+];
 
 pub struct Engine {
     tt: Table,
@@ -507,7 +508,8 @@ pub struct Engine {
     stm_non_pawn_correction_history: CorrectionHistory,
     nstm_non_pawn_correction_history: CorrectionHistory,
     minor_correction_history: CorrectionHistory,
-    // major_correction_history: CorrectionHistory,
+    major_correction_history: CorrectionHistory,
+    move_stack: Vec<StackMove>,
 }
 
 impl Engine {
@@ -522,7 +524,8 @@ impl Engine {
             stm_non_pawn_correction_history: CorrectionHistory::new(),
             nstm_non_pawn_correction_history: CorrectionHistory::new(),
             minor_correction_history: CorrectionHistory::new(),
-            // major_correction_history: CorrectionHistory::new(),
+            major_correction_history: CorrectionHistory::new(),
+            move_stack: Vec::with_capacity(256),
         }
     }
 
@@ -531,7 +534,8 @@ impl Engine {
         self.stm_non_pawn_correction_history.clear();
         self.nstm_non_pawn_correction_history.clear();
         self.minor_correction_history.clear();
-        // self.major_correction_history.clear();
+        self.major_correction_history.clear();
+        self.continuation_history.clear();
         self.tt.clear();
     }
 
@@ -542,17 +546,17 @@ impl Engine {
     pub fn get_correction_value(&self, board: &Board) -> i32 {
         let pawn_hash = board.pawn_hash(board.side_to_move()) ^ board.pawn_hash(!board.side_to_move());
         let minor_hash = board.minor_piece_hash(board.side_to_move()) ^ board.minor_piece_hash(!board.side_to_move());
-        // let major_hash = board.major_piece_hash(board.side_to_move()) ^ board.major_piece_hash(!board.side_to_move());
+        let major_hash = board.major_piece_hash(board.side_to_move()) ^ board.major_piece_hash(!board.side_to_move());
         let stm_non_pawn_hash = board.non_pawn_hash(board.side_to_move());
         let nstm_non_pawn_hash = board.non_pawn_hash(!board.side_to_move());
 
         let correction = (
             0 // just for formatting reasons
-            // + self.pawn_correction_history.get(board.side_to_move() as usize, pawn_hash)
-            // + self.minor_correction_history.get(board.side_to_move() as usize, minor_hash)
-            // + self.major_correction_history.get(board.side_to_move() as usize, major_hash)
-            + self.stm_non_pawn_correction_history.get(board.side_to_move() as usize, stm_non_pawn_hash)
-            + self.nstm_non_pawn_correction_history.get(board.side_to_move() as usize, nstm_non_pawn_hash)
+            + 0*self.pawn_correction_history.get(board.side_to_move() as usize, pawn_hash)
+            + 0*self.minor_correction_history.get(board.side_to_move() as usize, minor_hash)
+            + 0*self.major_correction_history.get(board.side_to_move() as usize, major_hash)
+            + 0*self.stm_non_pawn_correction_history.get(board.side_to_move() as usize, stm_non_pawn_hash)
+            + 0*self.nstm_non_pawn_correction_history.get(board.side_to_move() as usize, nstm_non_pawn_hash)
         ) / 64;
         return correction;
     }
@@ -562,14 +566,23 @@ impl Engine {
 
         board.generate_moves(|moves_for_piece| {
             for mv in moves_for_piece {
-                let mut emv =
-                    EngineMove::new(board, mv, moves_for_piece.piece, tt_move == Some(mv));
+                let mut emv = EngineMove::new(board, mv, moves_for_piece.piece, tt_move == Some(mv));
 
                 if emv.is_capture {
                     emv.see_score = static_exchange_evaluation(board, &emv);
                     emv.history = self.capture_history.get(board.side_to_move() as usize, mv.to, emv.piece_type, emv.target_type.unwrap());
                 } else {
-                    emv.history = self.quiet_history.get(board.side_to_move() as usize, mv.from, mv.to);
+                    let quiet_history = self.quiet_history.get(board.side_to_move() as usize, mv.from, mv.to);
+                    let mut continuation_history = 0;
+
+                    // for ply in 0..min(self.move_stack.len(), CONTHIST_PLY) {
+                    //     let prev = &self.move_stack[self.move_stack.len()-ply-1];
+                    //     continuation_history += self.continuation_history.get(
+                    //         ply, board.side_to_move() as usize, prev.mv.to, prev.piece, mv.to, emv.piece_type
+                    //     );
+                    // }
+                    
+                    emv.history = quiet_history + continuation_history;
                 }
 
                 if emv.is_capture || emv.is_tt {
@@ -687,10 +700,7 @@ impl Engine {
         } else {
             result = static_eval;
         }
-        let mut picker = MovePicker::new(
-            moves,
-            if board.side_to_move() == White { 0 } else { 1 },
-        );
+        let mut picker = MovePicker::new(moves);
         while let Some(mv) = picker.next() {
             if !in_check && mv.see_score < -100 {
                 continue;
@@ -701,10 +711,10 @@ impl Engine {
             next_board.play_unchecked(mv.mv);
 
             context.history.push(next_board.hash());
-            context.move_stack.push(StackMove { mv: Some(mv.mv), piece: Some(mv.piece_type) });
+            self.move_stack.push(StackMove {mv: mv.mv, piece: mv.piece_type, is_null: false});
             let child = self.quiesce(&next_board, ply + 1, -bounds, context);
             context.history.pop();
-            context.move_stack.pop();
+            self.move_stack.pop();
             self.nnue = previous_nnue;
 
             let x = -child?;
@@ -742,7 +752,7 @@ impl Engine {
         next_board.play_unchecked(mv.mv);
 
         context.history.push(next_board.hash());
-        context.move_stack.push(StackMove { mv: Some(mv.mv), piece: Some(mv.piece_type) });
+        self.move_stack.push(StackMove { mv: mv.mv, piece: mv.piece_type, is_null: false });
 
         let child = if first_move {
             self.minimax(&next_board, depth, ply, pv, false, -bounds, context)
@@ -760,7 +770,7 @@ impl Engine {
             }
         };
 
-        context.move_stack.pop();
+        self.move_stack.pop();
         context.history.pop();
         self.nnue = previous_nnue;
 
@@ -857,7 +867,7 @@ impl Engine {
                 beta: -bounds.beta + 1,
             };
             
-            context.move_stack.push(StackMove { mv: None, piece: None });
+            self.move_stack.push(DUMMY_NULL[board.side_to_move() as usize]);
             let score = -self.minimax(
                 &new_board,
                 depth - r,
@@ -867,7 +877,7 @@ impl Engine {
                 null_bounds,
                 context,
             )?;
-            context.move_stack.pop();
+            self.move_stack.pop();
 
             if score >= bounds.beta {
                 return Some(score);
@@ -876,7 +886,7 @@ impl Engine {
 
         let moves = self.generate_moves(board, tt_move);
         let stm_index = if board.side_to_move() == White { 0 } else { 1 };
-        let mut picker = MovePicker::new(moves, stm_index);
+        let mut picker = MovePicker::new(moves);
 
         let mut result = -1_000_000_000;
         let mut best_move: Option<EngineMove> = None;
@@ -895,8 +905,10 @@ impl Engine {
             let lmr_depth = if depth <= 3 || first_move || mv.is_capture || mv.promotion || in_check {
                 0
             } else {
-                let mut res = (0.99 + (depth as f32).ln() * (moves_played as f32).ln() / 3.14) as i32;
-                // res -= (correction.abs() >= 64) as i32;
+                let res = 
+                (0.99 + (depth as f32).ln() * (moves_played as f32).ln() / 3.14) as i32
+                // - (correction.abs() >= 64) as i32
+                ;
                 res.max(0)
             };
 
@@ -943,14 +955,25 @@ impl Engine {
                             self.quiet_history.update(stm_index,mv2.mv.from, mv2.mv.to, -history_bonus(depth) / 4);
                         }
                     }
+
+                    for ply in 0..min(self.move_stack.len(), CONTHIST_PLY) {
+                        let prev = &self.move_stack[self.move_stack.len()-ply-1];
+                        if prev.is_null {continue;}
+
+                        self.continuation_history.update(ply, stm_index, prev.mv.to, prev.piece, mv.mv.to, mv.piece_type, history_bonus(depth));
+                    
+                        for mv2 in picker.tried_quiets() {
+                            if mv2.mv == mv.mv {continue;}
+                            self.continuation_history.update(ply, stm_index, prev.mv.to, prev.piece, mv2.mv.to, mv2.piece_type, -history_bonus(depth)/4);
+                        }
+                    }
+                } else if mv.is_capture {
+                    self.capture_history.update(stm_index, mv.mv.to, mv.piece_type, mv.target_type.unwrap(), history_bonus(depth));
+                    for mv2 in picker.tried_captures {
+                        if mv2.mv == mv.mv {continue;}
+                        self.capture_history.update(stm_index, mv2.mv.to, mv2.piece_type, mv2.target_type.unwrap(), -history_bonus(depth)/4);
+                    }
                 }
-                //  else if mv.is_capture {
-                //     self.capture_history.update(stm_index, mv.mv.to, mv.piece_type, mv.target_type.unwrap(), history_bonus(depth));
-                //     for mv2 in picker.tried_captures {
-                //         if mv2.mv == mv.mv {continue;}
-                //         self.capture_history.update(stm_index, mv2.mv.to, mv2.piece_type, mv2.target_type.unwrap(), -history_bonus(depth)/4);
-                //     }
-                // }
                 break;
             }
 
@@ -979,13 +1002,13 @@ impl Engine {
             let bonus = (result - static_eval) * depth / 4;
             let pawn_hash = board.pawn_hash(board.side_to_move()) ^ board.pawn_hash(!board.side_to_move());
             let minor_hash = board.minor_piece_hash(board.side_to_move()) ^ board.minor_piece_hash(!board.side_to_move());
-            // let major_hash = board.major_piece_hash(board.side_to_move()) ^ board.major_piece_hash(!board.side_to_move());
+            let major_hash = board.major_piece_hash(board.side_to_move()) ^ board.major_piece_hash(!board.side_to_move());
             let stm_non_pawn_hash = board.non_pawn_hash(board.side_to_move());
             let nstm_non_pawn_hash = board.non_pawn_hash(!board.side_to_move());
 
             self.pawn_correction_history.update(stm_index, pawn_hash, bonus);
-            // self.minor_correction_history.update(stm_index, minor_hash, bonus);
-            // self.major_correction_history.update(stm_index, major_hash, bonus);
+            self.minor_correction_history.update(stm_index, minor_hash, bonus);
+            self.major_correction_history.update(stm_index, major_hash, bonus);
             self.stm_non_pawn_correction_history.update(stm_index, stm_non_pawn_hash, bonus);
             self.nstm_non_pawn_correction_history.update(stm_index, nstm_non_pawn_hash, bonus);
         }
@@ -1014,8 +1037,7 @@ impl Engine {
         let mut best_move = None;
         let mut best_score = -1_000_000_000;
 
-        let stm_index = if board.side_to_move() == White { 0 } else { 1 };
-        let mut picker = MovePicker::new(root_moves.clone(), stm_index);
+        let mut picker = MovePicker::new(root_moves.clone());
         let mut first_move = true;
         while let Some(mv) = picker.next() {
             let score = self.search_move(
@@ -1075,8 +1097,8 @@ impl Engine {
         let mut completed_move = root_tt_move;
         let mut depth = 1;
 
+        self.move_stack.clear();
         self.quiet_history.clear();
-        self.continuation_history.clear();
         self.capture_history.clear();
         self.nnue = NnueState::from_board(&request.board);
 
