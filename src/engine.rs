@@ -549,10 +549,10 @@ impl Engine {
         let correction = (
             0 // just for formatting reasons
             // + self.pawn_correction_history.get(board.side_to_move() as usize, pawn_hash)
-            // + 104 * self.minor_correction_history.get(board.side_to_move() as usize, minor_hash)
-            // // + 49 * self.major_correction_history.get(board.side_to_move() as usize, major_hash)
-            // + self.stm_non_pawn_correction_history.get(board.side_to_move() as usize, stm_non_pawn_hash)
-            // + self.nstm_non_pawn_correction_history.get(board.side_to_move() as usize, nstm_non_pawn_hash)
+            // + self.minor_correction_history.get(board.side_to_move() as usize, minor_hash)
+            // + self.major_correction_history.get(board.side_to_move() as usize, major_hash)
+            + self.stm_non_pawn_correction_history.get(board.side_to_move() as usize, stm_non_pawn_hash)
+            + self.nstm_non_pawn_correction_history.get(board.side_to_move() as usize, nstm_non_pawn_hash)
         ) / 64;
         return correction;
     }
@@ -1008,14 +1008,11 @@ impl Engine {
         board: &Board,
         depth: i32,
         root_moves: &MoveList,
+        mut bounds: SearchBounds,
         context: &mut SearchContext,
     ) -> Option<(Move, i32)> {
         let mut best_move = None;
         let mut best_score = -1_000_000_000;
-        let mut bounds = SearchBounds {
-            alpha: -1_000_000_000,
-            beta: 1_000_000_000,
-        };
 
         let stm_index = if board.side_to_move() == White { 0 } else { 1 };
         let mut picker = MovePicker::new(root_moves.clone(), stm_index);
@@ -1083,6 +1080,7 @@ impl Engine {
         self.capture_history.clear();
         self.nnue = NnueState::from_board(&request.board);
 
+        let mut previous_score = 0;
         while depth <= max_depth {
             if context.should_stop() {
                 break;
@@ -1101,33 +1099,52 @@ impl Engine {
                     .retain(|mv| request.limits.searchmoves.contains(&mv.mv));
             }
 
-            let Some((best_move, score)) =
-                self.root_search(&request.board, depth, &root_moves, &mut context)
-            else {
-                break;
-            };
+            let mut alpha_delta = 20;
+            let mut beta_delta = 20;
 
-            completed_move = Some(best_move);
-            if request.limits.searchmoves.is_empty() {
-                self.tt.insert(
-                    root_key,
-                    TableEntry {
-                        key: root_key,
-                        score: score_to_tt(score, 0),
+            loop {
+                // aspiration windows
+                let bounds = SearchBounds {
+                    alpha: if depth <= 4 {-1_000_000_000} else {previous_score - alpha_delta},
+                    beta: if depth <= 4 {1_000_000_000} else {previous_score + beta_delta},
+                };
+
+                let Some((best_move, score)) =
+                    self.root_search(&request.board, depth, &root_moves, bounds, &mut context)
+                else {
+                    break;
+                };
+
+                if score <= bounds.alpha {
+                    alpha_delta *= 2;
+                } else if score >= bounds.beta {
+                    beta_delta *= 2;
+                } else {
+                    previous_score = score;
+                    completed_move = Some(best_move);
+                    if request.limits.searchmoves.is_empty() {
+                        self.tt.insert(
+                            root_key,
+                            TableEntry {
+                                key: root_key,
+                                score: score_to_tt(score, 0),
+                                depth,
+                                node_type: EXACT,
+                                best_move: Some(best_move),
+                            },
+                        );
+                    }
+
+                    report(SearchInfo {
                         depth,
-                        node_type: EXACT,
-                        best_move: Some(best_move),
-                    },
-                );
+                        score,
+                        nodes: context.nodes,
+                        elapsed: context.elapsed(),
+                        pv: vec![best_move],
+                    });
+                    break;
+                }
             }
-
-            report(SearchInfo {
-                depth,
-                score,
-                nodes: context.nodes,
-                elapsed: context.elapsed(),
-                pv: vec![best_move],
-            });
 
             if context.soft_expired() || depth == max_depth {
                 break;
