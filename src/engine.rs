@@ -178,18 +178,17 @@ fn time_deadlines(
     limits: &SearchLimits,
     start: Instant,
 ) -> (Option<Instant>, Option<Instant>) {
-    let Some(budget_ms) = time_budget_ms(board, limits) else {
+    let Some((soft_ms, hard_ms)) = time_budget_ms(board, limits) else {
         return (None, None);
     };
 
-    let hard = Duration::from_millis(budget_ms.max(1));
-    let soft = Duration::from_millis((budget_ms * 4 / 5).max(1));
-    (Some(start + soft), Some(start + hard))
+    (Some(start + Duration::from_millis(soft_ms)), Some(start + Duration::from_millis(hard_ms)))
 }
 
-fn time_budget_ms(board: &Board, limits: &SearchLimits) -> Option<u64> {
+fn time_budget_ms(board: &Board, limits: &SearchLimits) -> Option<(u64, u64)> {
     if let Some(movetime) = limits.movetime {
-        return Some(movetime.saturating_sub(5).max(1));
+        let budget = movetime.saturating_sub(5).max(1);
+        return Some((budget, budget));
     }
 
     if limits.infinite {
@@ -202,12 +201,22 @@ fn time_budget_ms(board: &Board, limits: &SearchLimits) -> Option<u64> {
         (limits.btime?, limits.binc.unwrap_or(0))
     };
 
-    let moves_to_go = limits.movestogo.unwrap_or(30).max(1);
-    let reserve = (remaining / 100).max(5);
-    let available = remaining.saturating_sub(reserve).max(1);
-    let allocation = remaining / moves_to_go + increment * 3 / 4;
+    let safe = remaining.saturating_sub(100).max(1);
+    let moves_to_go = limits.movestogo.unwrap_or(30).clamp(1, 52);
+    let increment_share = increment.saturating_mul(3) / 4;
 
-    Some(allocation.min(available).max(1))
+    let soft = (safe / moves_to_go)
+        .saturating_add(increment_share)
+        .min(safe)
+        .max(1);
+
+    let hard = (safe / moves_to_go)
+        .saturating_mul(7)
+        .saturating_add(increment_share)
+        .min(safe)
+        .max(soft);
+
+    Some((soft, hard))
 }
 
 #[derive(Clone, Copy)]
@@ -539,11 +548,11 @@ impl Engine {
 
         let correction = (
             0 // just for formatting reasons
-            // + 128 * self.pawn_correction_history.get(board.side_to_move() as usize, pawn_hash)
+            // + self.pawn_correction_history.get(board.side_to_move() as usize, pawn_hash)
             // + 104 * self.minor_correction_history.get(board.side_to_move() as usize, minor_hash)
             // // + 49 * self.major_correction_history.get(board.side_to_move() as usize, major_hash)
-            + self.stm_non_pawn_correction_history.get(board.side_to_move() as usize, stm_non_pawn_hash)
-            + self.nstm_non_pawn_correction_history.get(board.side_to_move() as usize, nstm_non_pawn_hash)
+            // + self.stm_non_pawn_correction_history.get(board.side_to_move() as usize, stm_non_pawn_hash)
+            // + self.nstm_non_pawn_correction_history.get(board.side_to_move() as usize, nstm_non_pawn_hash)
         ) / 64;
         return correction;
     }
@@ -974,7 +983,7 @@ impl Engine {
             let stm_non_pawn_hash = board.non_pawn_hash(board.side_to_move());
             let nstm_non_pawn_hash = board.non_pawn_hash(!board.side_to_move());
 
-            // self.pawn_correction_history.update(stm_index, pawn_hash, bonus);
+            self.pawn_correction_history.update(stm_index, pawn_hash, bonus);
             // self.minor_correction_history.update(stm_index, minor_hash, bonus);
             // self.major_correction_history.update(stm_index, major_hash, bonus);
             self.stm_non_pawn_correction_history.update(stm_index, stm_non_pawn_hash, bonus);
@@ -1046,11 +1055,6 @@ impl Engine {
     where
         F: FnMut(SearchInfo),
     {
-        self.quiet_history.clear();
-        self.continuation_history.clear();
-        self.capture_history.clear();
-        self.nnue = NnueState::from_board(&request.board);
-
         let root_key = request.board.hash();
         let root_tt_move = self
             .tt
@@ -1073,6 +1077,11 @@ impl Engine {
         );
         let mut completed_move = root_tt_move;
         let mut depth = 1;
+
+        self.quiet_history.clear();
+        self.continuation_history.clear();
+        self.capture_history.clear();
+        self.nnue = NnueState::from_board(&request.board);
 
         while depth <= max_depth {
             if context.should_stop() {

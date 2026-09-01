@@ -54,7 +54,7 @@
         "alpha": 0.05,
         "beta": 0.05,
         "elo0": 0.0,
-        "elo1": 2.0,
+        "elo1": 10.0,
         "model": "normalized",
         "enabled": true
     },
@@ -89,9 +89,9 @@
     },
     "engines": [
         {
-            "name": "corr",
+            "name": "1",
             "dir": "",
-            "cmd": "/home/david/Development/chessbot/models/corr",
+            "cmd": "/home/david/Development/chessbot/models/timman1",
             "args": "",
             "restart": false,
             "options": [
@@ -114,9 +114,9 @@
             "variant": 0
         },
         {
-            "name": "fixlmp",
+            "name": "0",
             "dir": "",
-            "cmd": "/home/david/Development/chessbot/models/fixlmp",
+            "cmd": "/home/david/Development/chessbot/models/timman0",
             "args": "",
             "restart": false,
             "options": [
@@ -140,16 +140,16 @@
         }
     ],
     "stats": {
-        "corr vs fixlmp": {
-            "wins": 2711,
-            "losses": 2344,
-            "draws": 5681,
-            "penta_WW": 332,
-            "penta_WD": 1397,
-            "penta_WL": 650,
-            "penta_DD": 1541,
-            "penta_LD": 1202,
-            "penta_LL": 246
+        "1 vs 0": {
+            "wins": 154,
+            "losses": 76,
+            "draws": 266,
+            "penta_WW": 27,
+            "penta_WD": 78,
+            "penta_WL": 22,
+            "penta_DD": 72,
+            "penta_LD": 44,
+            "penta_LL": 5
         }
     }
 }
