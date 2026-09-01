@@ -54,7 +54,7 @@
         "alpha": 0.05,
         "beta": 0.05,
         "elo0": 0.0,
-        "elo1": 10.0,
+        "elo1": 2.0,
         "model": "normalized",
         "enabled": true
     },
@@ -89,12 +89,17 @@
     },
     "engines": [
         {
-            "name": "pawnhist",
+            "name": "corr",
             "dir": "",
-            "cmd": "/home/david/Development/chessbot/models/pawnhist",
+            "cmd": "/home/david/Development/chessbot/models/corr",
             "args": "",
             "restart": false,
-            "options": [],
+            "options": [
+                [
+                    "Hash",
+                    "256"
+                ]
+            ],
             "limit": {
                 "tc": {
                     "increment": 80,
@@ -109,12 +114,17 @@
             "variant": 0
         },
         {
-            "name": "ttbuckets",
+            "name": "fixlmp",
             "dir": "",
-            "cmd": "/home/david/Development/chessbot/models/ttbuckets",
+            "cmd": "/home/david/Development/chessbot/models/fixlmp",
             "args": "",
             "restart": false,
-            "options": [],
+            "options": [
+                [
+                    "Hash",
+                    "256"
+                ]
+            ],
             "limit": {
                 "tc": {
                     "increment": 80,
@@ -130,16 +140,16 @@
         }
     ],
     "stats": {
-        "pawnhist vs ttbuckets": {
-            "wins": 639,
-            "losses": 543,
-            "draws": 1440,
-            "penta_WW": 84,
-            "penta_WD": 347,
-            "penta_WL": 124,
-            "penta_DD": 399,
-            "penta_LD": 295,
-            "penta_LL": 62
+        "corr vs fixlmp": {
+            "wins": 2711,
+            "losses": 2344,
+            "draws": 5681,
+            "penta_WW": 332,
+            "penta_WD": 1397,
+            "penta_WL": 650,
+            "penta_DD": 1541,
+            "penta_LD": 1202,
+            "penta_LL": 246
         }
     }
 }

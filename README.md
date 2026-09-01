@@ -728,3 +728,22 @@ except for nmp, the engine was at 2500 rating (compared to stash 18 at 10+0.1 tc
 
 now that rmp and lmr pass it goes to 2700 rating (compared to stash 21.2 at 10+0.1)
 new network trained on better evals gives it 2850 rating (compared to stash 21.2)
+
+newer network trained on betterer evals gives 81.29 +/- 26.44 more rating
+
+Results of corr vs fixlmp (8+0.08, NULL, 256MB, popularpos_lichess_v3.epd):
+Elo: 25.58 +/- 14.00, nElo: 36.54 +/- 19.91
+LOS: 99.98 %, DrawRatio: 38.63 %, PairsRatio: 1.46
+Games: 1170, Wins: 334, Losses: 248, Draws: 588, Points: 628.0 (53.68 %)
+Ptnml(0-2): [28, 118, 226, 166, 47], WL/DD Ratio: 0.49
+LLR: 3.01 (102.4%) (-2.94, 2.94) [0.00, 10.00]
+--------------------------------------------------
+
+--------------------------------------------------
+Results of corr vs fixlmp (8+0.08, NULL, 256MB, popularpos_lichess_v3.epd):
+Elo: 11.88 +/- 4.44, nElo: 17.61 +/- 6.57
+LOS: 100.00 %, DrawRatio: 40.82 %, PairsRatio: 1.19
+Games: 10736, Wins: 2711, Losses: 2344, Draws: 5681, Points: 5551.5 (51.71 %)
+Ptnml(0-2): [246, 1202, 2191, 1397, 332], WL/DD Ratio: 0.42
+LLR: 2.95 (100.1%) (-2.94, 2.94) [0.00, 2.00]
+--------------------------------------------------

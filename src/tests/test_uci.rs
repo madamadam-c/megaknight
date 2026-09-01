@@ -1,6 +1,9 @@
 use cozy_chess::{Board, Color, util::parse_uci_move};
 
-use crate::{format_uci_move, parse_go, parse_hash_option, parse_position};
+use crate::{
+    engine::{CorrectionWeight, quantize_correction_weight},
+    format_uci_move, parse_correction_weight_option, parse_go, parse_hash_option, parse_position,
+};
 
 #[test]
 fn parse_go_collects_multiple_limits() {
@@ -63,4 +66,17 @@ fn parse_hash_option_reads_megabytes() {
     assert_eq!(parse_hash_option("setoption name Hash value 64"), Some(64));
     assert_eq!(parse_hash_option("setoption name Hash value 0"), Some(1));
     assert_eq!(parse_hash_option("setoption name Threads value 4"), None);
+}
+
+#[test]
+fn correction_weights_are_parsed_and_quantized_to_fives() {
+    let (weight, value) =
+        parse_correction_weight_option("setoption name PawnCorrWeight value 77").unwrap();
+    assert!(matches!(weight, CorrectionWeight::Pawn));
+    assert_eq!(quantize_correction_weight(value), 75);
+    assert_eq!(quantize_correction_weight(-10), 0);
+    assert_eq!(quantize_correction_weight(103), 100);
+    assert_eq!(quantize_correction_weight(38), 40);
+
+    assert!(parse_correction_weight_option("setoption name Hash value 16").is_none());
 }
