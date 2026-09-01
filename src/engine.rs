@@ -897,7 +897,7 @@ impl Engine {
         while let Some(mv) = picker.next() {
             moves_played += 1;
 
-            if !in_check && moves_played >= lmp_cap && !mv.is_capture && !mv.promotion {
+            if !pv && !in_check && moves_played >= lmp_cap && !mv.is_capture && !mv.promotion {
                 picker.stage = Stage::BadCaptures;
                 continue;
             }

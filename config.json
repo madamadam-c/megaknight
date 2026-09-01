@@ -91,7 +91,7 @@
         {
             "name": "1",
             "dir": "",
-            "cmd": "/home/david/Development/chessbot/models/capsee",
+            "cmd": "/home/david/Development/chessbot/models/lmppv",
             "args": "",
             "restart": false,
             "options": [
@@ -102,9 +102,9 @@
             ],
             "limit": {
                 "tc": {
-                    "increment": 80,
+                    "increment": 0,
                     "fixed_time": 0,
-                    "time": 8000,
+                    "time": 1000,
                     "moves": 0,
                     "timemargin": 0
                 },
@@ -116,7 +116,7 @@
         {
             "name": "0",
             "dir": "",
-            "cmd": "/home/david/Development/chessbot/models/cmh",
+            "cmd": "/home/david/Development/chessbot/models/capsee",
             "args": "",
             "restart": false,
             "options": [
@@ -127,9 +127,9 @@
             ],
             "limit": {
                 "tc": {
-                    "increment": 80,
+                    "increment": 0,
                     "fixed_time": 0,
-                    "time": 8000,
+                    "time": 1000,
                     "moves": 0,
                     "timemargin": 0
                 },
@@ -141,15 +141,15 @@
     ],
     "stats": {
         "1 vs 0": {
-            "wins": 153,
-            "losses": 81,
-            "draws": 250,
-            "penta_WW": 17,
-            "penta_WD": 86,
-            "penta_WL": 33,
-            "penta_DD": 61,
-            "penta_LD": 42,
-            "penta_LL": 3
+            "wins": 965,
+            "losses": 853,
+            "draws": 1100,
+            "penta_WW": 158,
+            "penta_WD": 345,
+            "penta_WL": 304,
+            "penta_DD": 220,
+            "penta_LD": 315,
+            "penta_LL": 117
         }
     }
 }
