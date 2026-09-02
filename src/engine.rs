@@ -448,7 +448,7 @@ impl MovePicker {
                         if mv.is_tt {
                             i32::MAX
                         } else {
-                            mv.history
+                            mv.history + value(mv.target_type.unwrap()) * 30
                             // mv.see_score as i32
                             // 0
                         }
@@ -475,7 +475,7 @@ impl MovePicker {
                 Stage::BadCaptures => {
                     if let Some(mv) = pick_max(&mut self.bad_captures, |mv| 
                         // mv.see_score as i32
-                        mv.history
+                        mv.history + value(mv.target_type.unwrap()) * 15
                         // 0
                         ) {
                         self.tried_captures.push(mv);
