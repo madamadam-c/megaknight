@@ -91,7 +91,7 @@
         {
             "name": "1",
             "dir": "",
-            "cmd": "/home/david/Development/chessbot/models/lmr_depth",
+            "cmd": "/home/david/Development/chessbot/models/lmr_pv",
             "args": "",
             "restart": false,
             "options": [
@@ -116,7 +116,7 @@
         {
             "name": "0",
             "dir": "",
-            "cmd": "/home/david/Development/chessbot/models/lmr_base",
+            "cmd": "/home/david/Development/chessbot/models/lmr_depth",
             "args": "",
             "restart": false,
             "options": [
@@ -141,15 +141,15 @@
     ],
     "stats": {
         "1 vs 0": {
-            "wins": 280,
-            "losses": 193,
-            "draws": 319,
-            "penta_WW": 47,
-            "penta_WD": 113,
-            "penta_WL": 73,
-            "penta_DD": 62,
-            "penta_LD": 82,
-            "penta_LL": 19
+            "wins": 738,
+            "losses": 749,
+            "draws": 1075,
+            "penta_WW": 88,
+            "penta_WD": 310,
+            "penta_WL": 252,
+            "penta_DD": 222,
+            "penta_LD": 321,
+            "penta_LL": 88
         }
     }
 }
