@@ -1,4 +1,7 @@
-use crate::{engine::EngineMove, evaluate::static_exchange_evaluation};
+use crate::{
+    engine::EngineMove,
+    evaluate::{see_bucket, static_exchange_evaluation, static_exchange_evaluation_ge},
+};
 use cozy_chess::{Board, util::parse_uci_move};
 
 fn see(fen: &str, move_text: &str) -> i16 {
@@ -7,6 +10,22 @@ fn see(fen: &str, move_text: &str) -> i16 {
     let piece = board.piece_on(mv.from).unwrap();
 
     static_exchange_evaluation(&board, &EngineMove::new(&board, mv, piece, false))
+}
+
+fn assert_see_ge_matches_exact(fen: &str, move_text: &str) {
+    let board = Board::from_fen(fen, false).unwrap();
+    let mv = parse_uci_move(&board, move_text).unwrap();
+    let piece = board.piece_on(mv.from).unwrap();
+    let mv = EngineMove::new(&board, mv, piece, false);
+    let exact = i32::from(static_exchange_evaluation(&board, &mv));
+
+    for threshold in [-1000, -800, -101, -100, -1, 0, 1, 99, 100, 101, 500, 1000] {
+        assert_eq!(
+            static_exchange_evaluation_ge(&board, &mv, threshold),
+            exact >= threshold,
+            "SEE={exact}, threshold={threshold}",
+        );
+    }
 }
 
 #[test]
@@ -43,4 +62,85 @@ fn see_tracks_a_recapturing_pawn_as_its_promoted_piece() {
 #[test]
 fn see_rejects_a_king_capture_on_a_defended_square() {
     assert_eq!(see("5k2/4p3/4Q3/8/1B6/8/8/K7 w - - 0 1", "e6e7"), 100);
+}
+
+#[test]
+fn threshold_see_matches_exact_see() {
+    for (fen, move_text) in [
+        ("7k/8/8/3p4/4P3/8/8/K7 w - - 0 1", "e4d5"),
+        ("7k/8/2p5/3p4/4P3/8/8/K7 w - - 0 1", "e4d5"),
+        ("7k/8/2p5/3p4/4Q3/8/8/K7 w - - 0 1", "e4d5"),
+        ("3r3k/8/8/3p4/8/3R4/8/K2Q4 w - - 0 1", "d3d5"),
+        ("3r3k/8/8/3pP3/8/8/8/K2R4 w - d6 0 1", "e5d6"),
+        ("k6r/6P1/8/8/8/8/8/K7 w - - 0 1", "g7h8q"),
+        ("Rr6/1Pn4k/8/8/8/8/8/K7 b - - 0 1", "b8a8"),
+        ("5k2/4p3/4Q3/8/1B6/8/8/K7 w - - 0 1", "e6e7"),
+    ] {
+        assert_see_ge_matches_exact(fen, move_text);
+    }
+}
+
+#[test]
+fn see_bucket_matches_exact_see() {
+    for (fen, move_text) in [
+        ("7k/8/8/3p4/4P3/8/8/K7 w - - 0 1", "e4d5"),
+        ("7k/8/2p5/3p4/4P3/8/8/K7 w - - 0 1", "e4d5"),
+        ("7k/8/2p5/3p4/4Q3/8/8/K7 w - - 0 1", "e4d5"),
+        ("3r3k/8/8/3p4/8/3R4/8/K2Q4 w - - 0 1", "d3d5"),
+        ("3r3k/8/8/3pP3/8/8/8/K2R4 w - d6 0 1", "e5d6"),
+        ("k6r/6P1/8/8/8/8/8/K7 w - - 0 1", "g7h8q"),
+        ("Rr6/1Pn4k/8/8/8/8/8/K7 b - - 0 1", "b8a8"),
+        ("5k2/4p3/4Q3/8/1B6/8/8/K7 w - - 0 1", "e6e7"),
+    ] {
+        let board = Board::from_fen(fen, false).unwrap();
+        let mv = parse_uci_move(&board, move_text).unwrap();
+        let piece = board.piece_on(mv.from).unwrap();
+        let mv = EngineMove::new(&board, mv, piece, false);
+        let exact = static_exchange_evaluation(&board, &mv);
+        let expected = match exact {
+            0.. => 0,
+            -100..=-1 => -100,
+            _ => -1_000_000,
+        };
+
+        assert_eq!(see_bucket(&board, &mv), expected, "SEE={exact}");
+    }
+}
+
+#[test]
+fn see_bucket_matches_exact_see_in_generated_positions() {
+    let mut board = Board::default();
+    let mut seed = 0x9e3779b97f4a7c15u64;
+
+    for _ in 0..1000 {
+        let mut moves = Vec::new();
+        board.generate_moves(|piece_moves| {
+            moves.extend(piece_moves);
+            false
+        });
+
+        if moves.is_empty() {
+            board = Board::default();
+            continue;
+        }
+
+        for &mv in &moves {
+            let piece = board.piece_on(mv.from).unwrap();
+            let mv = EngineMove::new(&board, mv, piece, false);
+            if !mv.is_capture && !mv.promotion {
+                continue;
+            }
+
+            let exact = static_exchange_evaluation(&board, &mv);
+            let expected = match exact {
+                0.. => 0,
+                -100..=-1 => -100,
+                _ => -1_000_000,
+            };
+            assert_eq!(see_bucket(&board, &mv), expected, "SEE={exact}");
+        }
+
+        seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1);
+        board.play_unchecked(moves[seed as usize % moves.len()]);
+    }
 }

@@ -24,6 +24,7 @@ mod selfplay;
 mod transposition;
 
 #[cfg(test)]
+#[path = "tests/test_evaluate.rs"]
 mod tests;
 
 enum Command {

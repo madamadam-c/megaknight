@@ -76,13 +76,13 @@ pub fn static_exchange_evaluation(board: &Board, mv: &EngineMove) -> i16 {
     loop {
         let mut found = false;
         let other = board.colors(!colour) & attacking_pieces;
+        let pinned = board.pinned_for(colour);
 
         for piece_type in Piece::ALL {
             if piece_type == King && !other.is_empty() {
                 break;
             }
 
-            let pinned = board.pinned_for(colour);
             let bad = pinned & !rays[colour as usize];
 
             let ours = board.colored_pieces(colour, piece_type) & attacking_pieces & !bad;
@@ -131,4 +131,213 @@ pub fn static_exchange_evaluation(board: &Board, mv: &EngineMove) -> i16 {
         gain[d] = -max(-gain[d], gain[d + 1]);
     }
     return gain[0] as i16;
+}
+
+pub fn static_exchange_evaluation_ge(board: &Board, mv: &EngineMove, threshold: i32) -> bool {
+    let square = mv.mv.to;
+
+    if mv.is_ep || mv.promotion || matches!(square.rank(), Rank::First | Rank::Eighth) {
+        return i32::from(static_exchange_evaluation(board, mv)) >= threshold;
+    }
+
+    let mut swap = mv.material_value - threshold;
+    if swap < 0 {
+        return false;
+    }
+
+    swap = value(mv.piece_type) - swap;
+    if swap <= 0 {
+        return true;
+    }
+
+    let mut occupied = board.occupied() ^ mv.mv.from.bitboard();
+    if !mv.is_capture {
+        occupied ^= square.bitboard();
+    }
+
+    let mut attackers = (get_king_moves(square) & board.pieces(King) & occupied)
+        | (get_knight_moves(square) & board.pieces(Knight) & occupied)
+        | (get_bishop_moves(square, occupied)
+            & occupied
+            & (board.pieces(Bishop) | board.pieces(Queen)))
+        | (get_rook_moves(square, occupied)
+            & occupied
+            & (board.pieces(Rook) | board.pieces(Queen)))
+        | (get_pawn_attacks(square, Black) & occupied & board.colored_pieces(White, Pawn))
+        | (get_pawn_attacks(square, White) & occupied & board.colored_pieces(Black, Pawn));
+
+    let rays = [
+        get_line_rays(board.king(White), square),
+        get_line_rays(board.king(Black), square),
+    ];
+    let mut colour = !board.side_to_move();
+    let mut result = true;
+
+    loop {
+        attackers &= occupied;
+
+        let pinned = board.pinned_for(colour);
+        let legal_attackers = attackers & board.colors(colour) & !(pinned & !rays[colour as usize]);
+        let defended = !(attackers & board.colors(!colour)).is_empty();
+        let mut selected = None;
+
+        for piece_type in Piece::ALL {
+            if piece_type == King && defended {
+                break;
+            }
+
+            if let Some(attacker) = (legal_attackers & board.pieces(piece_type)).next_square() {
+                selected = Some((attacker, piece_type));
+                break;
+            }
+        }
+
+        let Some((attacker, piece_type)) = selected else {
+            break;
+        };
+
+        result = !result;
+        swap = value(piece_type) - swap;
+        if swap < i32::from(result) {
+            break;
+        }
+
+        occupied ^= attacker.bitboard();
+        if matches!(piece_type, Rook | Queen) {
+            attackers |= get_rook_moves(square, occupied)
+                & occupied
+                & (board.pieces(Rook) | board.pieces(Queen));
+        }
+        if matches!(piece_type, Pawn | Bishop | Queen) {
+            attackers |= get_bishop_moves(square, occupied)
+                & occupied
+                & (board.pieces(Bishop) | board.pieces(Queen));
+        }
+
+        colour = !colour;
+    }
+
+    result
+}
+
+const SEE_NEG_INF: i32 = -1_000_000;
+
+pub fn see_bucket(board: &Board, mv: &EngineMove) -> i32 {
+    let square = mv.mv.to;
+
+    if mv.is_ep || mv.promotion || matches!(square.rank(), Rank::First | Rank::Eighth) {
+        return match i32::from(static_exchange_evaluation(board, mv)) {
+            0.. => 0,
+            -100..=-1 => -100,
+            _ => SEE_NEG_INF,
+        };
+    }
+
+    let moved_value = value(mv.piece_type);
+    let mut swap_0 = moved_value - mv.material_value;
+    let mut swap_100 = moved_value - (mv.material_value + 100);
+    let mut zero_result = (swap_0 <= 0).then_some(true);
+    let mut minus_100_result = (swap_100 <= 0).then_some(true);
+
+    if zero_result == Some(true) {
+        return 0;
+    }
+
+    let mut occupied = board.occupied() ^ mv.mv.from.bitboard();
+    if !mv.is_capture {
+        occupied ^= square.bitboard();
+    }
+
+    let mut attackers = (get_king_moves(square) & board.pieces(King) & occupied)
+        | (get_knight_moves(square) & board.pieces(Knight) & occupied)
+        | (get_bishop_moves(square, occupied)
+            & occupied
+            & (board.pieces(Bishop) | board.pieces(Queen)))
+        | (get_rook_moves(square, occupied)
+            & occupied
+            & (board.pieces(Rook) | board.pieces(Queen)))
+        | (get_pawn_attacks(square, Black) & occupied & board.colored_pieces(White, Pawn))
+        | (get_pawn_attacks(square, White) & occupied & board.colored_pieces(Black, Pawn));
+
+    let rays = [
+        get_line_rays(board.king(White), square),
+        get_line_rays(board.king(Black), square),
+    ];
+    let mut colour = !board.side_to_move();
+    let mut result = true;
+
+    loop {
+        attackers &= occupied;
+
+        let pinned = board.pinned_for(colour);
+        let legal_attackers = attackers & board.colors(colour) & !(pinned & !rays[colour as usize]);
+        let defended = !(attackers & board.colors(!colour)).is_empty();
+        let mut selected = None;
+
+        for piece_type in Piece::ALL {
+            if piece_type == King && defended {
+                break;
+            }
+
+            if let Some(attacker) = (legal_attackers & board.pieces(piece_type)).next_square() {
+                selected = Some((attacker, piece_type));
+                break;
+            }
+        }
+
+        let Some((attacker, piece_type)) = selected else {
+            zero_result.get_or_insert(result);
+            minus_100_result.get_or_insert(result);
+            break;
+        };
+
+        result = !result;
+        let attacker_value = value(piece_type);
+
+        if zero_result.is_none() {
+            swap_0 = attacker_value - swap_0;
+            if swap_0 < result as i32 {
+                zero_result = Some(result);
+            }
+        }
+
+        if minus_100_result.is_none() {
+            swap_100 = attacker_value - swap_100;
+            if swap_100 < result as i32 {
+                minus_100_result = Some(result);
+            }
+        }
+
+        if zero_result == Some(true) {
+            return 0;
+        }
+        if minus_100_result == Some(false) {
+            return SEE_NEG_INF;
+        }
+        if zero_result == Some(false) && minus_100_result == Some(true) {
+            return -100;
+        }
+
+        occupied ^= attacker.bitboard();
+        if matches!(piece_type, Rook | Queen) {
+            attackers |= get_rook_moves(square, occupied)
+                & occupied
+                & (board.pieces(Rook) | board.pieces(Queen));
+        }
+        if matches!(piece_type, Pawn | Bishop | Queen) {
+            attackers |= get_bishop_moves(square, occupied)
+                & occupied
+                & (board.pieces(Bishop) | board.pieces(Queen));
+        }
+
+        colour = !colour;
+    }
+
+    if zero_result == Some(true) {
+        0
+    } else if minus_100_result == Some(true) {
+        -100
+    } else {
+        SEE_NEG_INF
+    }
 }

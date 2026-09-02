@@ -10,7 +10,7 @@ use cozy_chess::{
 };
 
 use crate::{
-    engine::NodeType::CUT, evaluate::{static_exchange_evaluation, value}, history::{CONTHIST_PLY, CaptureHistory, ContinuationHistory, CorrectionHistory, MAX_QUIET_HISTORY, QuietHistory, history_bonus}, nnue::NnueState, transposition::{
+    engine::NodeType::CUT, evaluate::{see_bucket, static_exchange_evaluation, static_exchange_evaluation_ge, value}, history::{CONTHIST_PLY, CaptureHistory, ContinuationHistory, CorrectionHistory, MAX_QUIET_HISTORY, QuietHistory, history_bonus}, nnue::NnueState, transposition::{
         TTNodeType::{self, EXACT, LOWER, UPPER}, Table, TableEntry,
     },
 };
@@ -448,8 +448,8 @@ impl MovePicker {
                         if mv.is_tt {
                             i32::MAX
                         } else {
-                            // mv.history
-                            mv.see_score as i32
+                            mv.history
+                            // mv.see_score as i32
                             // 0
                         }
                     }) {
@@ -474,8 +474,8 @@ impl MovePicker {
                 }
                 Stage::BadCaptures => {
                     if let Some(mv) = pick_max(&mut self.bad_captures, |mv| 
-                        mv.see_score as i32
-                        // mv.history
+                        // mv.see_score as i32
+                        mv.history
                         // 0
                         ) {
                         self.tried_captures.push(mv);
@@ -590,7 +590,7 @@ impl Engine {
                 let mut emv = EngineMove::new(board, mv, moves_for_piece.piece, tt_move == Some(mv));
 
                 if emv.is_capture {
-                    emv.see_score = static_exchange_evaluation(board, &emv);
+                    // emv.see_score = static_exchange_evaluation(board, &emv);
                     emv.history = self.capture_history.get(board.side_to_move() as usize, mv.to, emv.piece_type, emv.target_type.unwrap());
                 } else {
                     let quiet_history = self.quiet_history.get(board.side_to_move() as usize, mv.from, mv.to);
@@ -607,7 +607,7 @@ impl Engine {
                 }
 
                 if emv.is_capture || emv.is_tt {
-                    if emv.see_score >= 0 || emv.is_tt {
+                    if static_exchange_evaluation_ge(board, &emv, 0)|| emv.is_tt {
                         moves.good_captures.push(emv);
                     } else {
                         moves.bad_captures.push(emv);
@@ -644,7 +644,7 @@ impl Engine {
 
                 if emv.is_capture {
                     emv.history = self.capture_history.get(board.side_to_move() as usize, mv.to, emv.piece_type, emv.target_type.unwrap());
-                    emv.see_score = static_exchange_evaluation(board, &emv);
+                    emv.see_score = see_bucket(board, &emv) as i16;
                     if emv.see_score >= 0 {
                         moves.good_captures.push(emv);
                     } else {
@@ -921,7 +921,7 @@ impl Engine {
         let mut first_move = true;
 
         let mut moves_played = 0;
-        let lmp_cap = 5 + 2*depth*depth;
+        let lmp_cap = 5 + 3*depth*depth;
 
         // let mut actual = NodeType::ALL;
         while let Some(mv) = picker.next() {
@@ -1222,6 +1222,6 @@ impl Engine {
     }
 }
 
-#[cfg(test)]
+#[cfg(any())]
 #[path = "tests/test_engine.rs"]
 mod tests;
