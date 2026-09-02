@@ -1,5 +1,5 @@
 use std::{
-    cmp::{max, min}, ops::Neg, sync::{
+    cmp::{max, min}, ops::Neg, os::linux::raw::stat, sync::{
         Arc,
         atomic::{AtomicBool, Ordering},
     }, time::{Duration, Instant},
@@ -531,6 +531,7 @@ pub struct Engine {
     minor_correction_history: CorrectionHistory,
     major_correction_history: CorrectionHistory,
     move_stack: Vec<StackMove>,
+    eval_stack: Vec<Option<i32>>,
 }
 
 impl Engine {
@@ -547,6 +548,7 @@ impl Engine {
             minor_correction_history: CorrectionHistory::new(),
             major_correction_history: CorrectionHistory::new(),
             move_stack: Vec::with_capacity(256),
+            eval_stack: Vec::with_capacity(256),
         }
     }
 
@@ -862,13 +864,25 @@ impl Engine {
         let mut static_eval = self.nnue.evaluate(board.side_to_move());
         let mut correction = self.get_correction_value(board);
         static_eval += correction;
+        
+        self.eval_stack.push(if in_check {None} else {Some(static_eval)});
+
+        let improving: bool = if in_check {
+            false
+        } else if ply >= 2 && let Some(eval) = self.eval_stack[(ply-2) as usize] {
+            static_eval > eval
+        } else if ply >= 4 && let Some(eval) = self.eval_stack[(ply-4) as usize] {
+            static_eval > eval
+        } else {
+            false
+        };
 
         // let razoring_margin = 163 + 41 * depth * depth;
         // if !in_check && !pv && static_eval + razoring_margin < bounds.alpha {
         //     return Some(static_eval);
         // }
 
-        let rfp_margin = 123 * depth; // + correction.abs() / 2;
+        let rfp_margin = (if improving {65} else {123}) * depth; // + correction.abs() / 2;
         if !in_check && !pv && depth <= 5 && static_eval - rfp_margin >= bounds.beta {
             return Some(static_eval);
         }
@@ -1139,6 +1153,7 @@ impl Engine {
         let mut depth = 1;
 
         self.move_stack.clear();
+        self.eval_stack.clear();
         self.quiet_history.clear();
         self.capture_history.clear();
         self.nnue = NnueState::from_board(&request.board);
