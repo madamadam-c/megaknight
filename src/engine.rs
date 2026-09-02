@@ -940,7 +940,7 @@ impl Engine {
                 lmr_depth += (1024.0 * (0.99 + (depth as f32).ln() * (moves_played as f32).ln() / 3.14)) as i32;
 
                 // reduce more on a cutnode
-                // lmr_depth += 500 * expected == CUT as i32;
+                lmr_depth += 500 * (expected == CUT) as i32;
 
                 // reduce less for a check
                 // lmr_depth -= 800 * in_check as i32;
