@@ -881,7 +881,7 @@ impl Engine {
            board.halfmove_clock() <= 95 && 
            (board.colors(board.side_to_move()) & !(board.pieces(Piece::Pawn) | board.pieces(Piece::King))).len() >= 1
         {
-            let r = 3 + depth / 4; // depth reduction apparently
+            let r = 3 + depth / 4 + min(3, (static_eval - bounds.beta) / 200); // depth reduction apparently
             let mut new_board = board.null_move().unwrap();
             new_board.set_halfmove_clock(new_board.halfmove_clock() - 1);
 
