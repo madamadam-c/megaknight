@@ -576,8 +576,8 @@ impl Engine {
             + 0*self.pawn_correction_history.get(board.side_to_move() as usize, pawn_hash)
             + 0*self.minor_correction_history.get(board.side_to_move() as usize, minor_hash)
             + 0*self.major_correction_history.get(board.side_to_move() as usize, major_hash)
-            + 0*self.stm_non_pawn_correction_history.get(board.side_to_move() as usize, stm_non_pawn_hash)
-            + 0*self.nstm_non_pawn_correction_history.get(board.side_to_move() as usize, nstm_non_pawn_hash)
+            + 1*self.stm_non_pawn_correction_history.get(board.side_to_move() as usize, stm_non_pawn_hash)
+            + 1*self.nstm_non_pawn_correction_history.get(board.side_to_move() as usize, nstm_non_pawn_hash)
         ) / 64;
         return correction;
     }
