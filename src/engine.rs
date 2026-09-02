@@ -921,7 +921,7 @@ impl Engine {
         let mut first_move = true;
 
         let mut moves_played = 0;
-        let lmp_cap = 3 + depth*depth;
+        let lmp_cap = 5 + 2*depth*depth;
 
         // let mut actual = NodeType::ALL;
         while let Some(mv) = picker.next() {
