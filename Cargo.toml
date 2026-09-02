@@ -5,7 +5,7 @@ edition = "2024"
 
 [dependencies]
 arrayvec = "0.7.8"
-cozy-chess = { path = "materials/cozy-chess/cozy-chess" }
+cozy-chess = { path = "vendor/cozy-chess/cozy-chess" }
 crossbeam-channel = "0.5.15"
 flate2 = "1.1.2"
 sfbinpack = "0.6.5"

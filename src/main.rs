@@ -18,10 +18,10 @@ use crate::engine::{Engine, SearchInfo, SearchLimits, SearchRequest, SearchResul
 mod bulk;
 mod engine;
 mod evaluate;
+mod history;
 mod nnue;
 mod selfplay;
 mod transposition;
-mod history;
 
 #[cfg(test)]
 mod tests;
@@ -231,6 +231,10 @@ fn spawn_input_reader(event_tx: mpsc::Sender<MainEvent>) -> JoinHandle<()> {
 
 fn main() {
     match std::env::args().nth(1).as_deref() {
+        Some("bench") => {
+            run_bench();
+            return;
+        }
         Some("bulk-eval") => {
             if let Err(error) = bulk::run_from_env() {
                 eprintln!("bulk-eval failed: {error}");
@@ -249,6 +253,64 @@ fn main() {
     }
 
     run_uci();
+}
+
+fn run_bench() {
+    const POSITIONS: [(&str, i32); 8] = [
+        (
+            "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+            12,
+        ),
+        (
+            "r3k2r/p1ppqpb1/bn2pnp1/2pP4/1p2P3/2N2N2/PPQBBPPP/R3K2R w KQkq - 0 1",
+            11,
+        ),
+        ("8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1", 13),
+        (
+            "rnbqkb1r/pp2pppp/3p1n2/8/3NP3/2N5/PPP2PPP/R1BQKB1R b KQkq - 0 1",
+            12,
+        ),
+        (
+            "rnbq1rk1/pp2bppp/2p1pn2/3p4/3P4/2NBPN2/PPQ2PPP/R1B1K2R w KQ - 2 9",
+            12,
+        ),
+        (
+            "2r2rk1/1bqnbppp/p2ppn2/1p6/3NP3/P1N1B3/1PQ1BPPP/2RR2K1 w - - 3 16",
+            12,
+        ),
+        (
+            "4rrk1/1pp2ppp/p1npb3/8/2P1P3/1PN1B3/P4PPP/2RR2K1 w - - 1 20",
+            13,
+        ),
+        ("8/5pk1/6p1/3pP3/3P1P2/6P1/5K2/8 w - - 0 40", 15),
+    ];
+
+    let mut engine = Engine::new();
+    let started = std::time::Instant::now();
+    let mut total_nodes = 0u64;
+
+    for (fen, depth) in POSITIONS {
+        let board = Board::from_fen(fen, false)
+            .unwrap_or_else(|error| panic!("invalid benchmark FEN {fen}: {error:?}"));
+        engine.new_game();
+        let mut nodes = 0;
+        let request = SearchRequest {
+            board: board.clone(),
+            history: vec![board.hash()],
+            limits: SearchLimits {
+                depth: Some(depth),
+                ..SearchLimits::default()
+            },
+            stop: Arc::new(AtomicBool::new(false)),
+        };
+
+        engine.search(&request, |info| nodes = info.nodes);
+        total_nodes = total_nodes.saturating_add(nodes);
+    }
+
+    let elapsed_nanos = started.elapsed().as_nanos().max(1);
+    let nps = (u128::from(total_nodes) * 1_000_000_000 / elapsed_nanos) as u64;
+    println!("{total_nodes} nodes {nps} nps");
 }
 
 fn run_uci() {
@@ -318,6 +380,7 @@ fn run_uci() {
             Some("uci") => {
                 print_output("id name chessbot");
                 print_output("id author me");
+                print_output("option name Threads type spin default 1 min 1 max 1");
                 print_output("option name Hash type spin default 16 min 1 max 65536");
                 print_output("uciok");
             }
