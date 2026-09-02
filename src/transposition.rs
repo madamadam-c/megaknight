@@ -6,7 +6,7 @@ const CLUSTER_SIZE: usize = 2;
 const EXACT_BONUS: i64 = 2;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub enum NodeType {
+pub enum TTNodeType {
     EXACT,
     LOWER,
     UPPER,
@@ -17,7 +17,7 @@ pub struct TableEntry {
     pub key: u64,
     pub score: i32,
     pub depth: i32,
-    pub node_type: NodeType,
+    pub node_type: TTNodeType,
     pub best_move: Option<Move>,
 }
 
@@ -83,7 +83,7 @@ impl Table {
         }) {
             let current = slot.entry.unwrap();
             if entry.depth >= current.depth - 2
-                || (entry.node_type == NodeType::EXACT && current.node_type != NodeType::EXACT)
+                || (entry.node_type == TTNodeType::EXACT && current.node_type != TTNodeType::EXACT)
             {
                 *slot = TableSlot {
                     epoch,
@@ -122,7 +122,7 @@ impl Table {
 
 fn entry_value(entry: TableEntry) -> i64 {
     i64::from(entry.depth)
-        + if entry.node_type == NodeType::EXACT {
+        + if entry.node_type == TTNodeType::EXACT {
             EXACT_BONUS
         } else {
             0
@@ -137,7 +137,7 @@ fn largest_power_of_two(value: usize) -> usize {
 mod tests {
     use super::*;
 
-    fn entry(key: u64, depth: i32, node_type: NodeType) -> TableEntry {
+    fn entry(key: u64, depth: i32, node_type: TTNodeType) -> TableEntry {
         TableEntry {
             key,
             score: depth,
@@ -160,7 +160,7 @@ mod tests {
     fn clear_invalidates_entries_without_reallocating() {
         let mut table = Table::new(1);
         let allocation = table.buckets.as_ptr();
-        let entry = entry(42, 3, NodeType::EXACT);
+        let entry = entry(42, 3, TTNodeType::EXACT);
         table.insert(entry.key, entry);
 
         table.clear();
@@ -173,7 +173,7 @@ mod tests {
     fn colliding_keys_share_a_cluster() {
         let mut table = Table::new(1);
         for key in 0..CLUSTER_SIZE as u64 {
-            table.insert(key, entry(key, key as i32 + 1, NodeType::LOWER));
+            table.insert(key, entry(key, key as i32 + 1, TTNodeType::LOWER));
         }
 
         for key in 0..CLUSTER_SIZE as u64 {
@@ -184,10 +184,10 @@ mod tests {
     #[test]
     fn full_cluster_always_replaces_its_lowest_value_entry() {
         let mut table = Table::new(1);
-        table.insert(1, entry(1, 10, NodeType::EXACT));
-        table.insert(2, entry(2, 8, NodeType::LOWER));
+        table.insert(1, entry(1, 10, TTNodeType::EXACT));
+        table.insert(2, entry(2, 8, TTNodeType::LOWER));
 
-        table.insert(100, entry(100, 1, NodeType::LOWER));
+        table.insert(100, entry(100, 1, TTNodeType::LOWER));
 
         assert!(table.get(100).is_some());
         assert!(table.get(1).is_some());
@@ -197,9 +197,9 @@ mod tests {
     #[test]
     fn same_key_keeps_a_much_deeper_current_entry() {
         let mut table = Table::new(1);
-        table.insert(42, entry(42, 10, NodeType::EXACT));
+        table.insert(42, entry(42, 10, TTNodeType::EXACT));
 
-        table.insert(42, entry(42, 1, NodeType::LOWER));
+        table.insert(42, entry(42, 1, TTNodeType::LOWER));
 
         assert_eq!(table.get(42).unwrap().depth, 10);
     }

@@ -10,8 +10,8 @@ use cozy_chess::{
 };
 
 use crate::{
-    evaluate::{static_exchange_evaluation, value}, history::{CONTHIST_PLY, CaptureHistory, ContinuationHistory, CorrectionHistory, MAX_QUIET_HISTORY, QuietHistory, history_bonus}, nnue::NnueState, transposition::{
-        NodeType::{self, EXACT, LOWER, UPPER}, Table, TableEntry,
+    engine::NodeType::CUT, evaluate::{static_exchange_evaluation, value}, history::{CONTHIST_PLY, CaptureHistory, ContinuationHistory, CorrectionHistory, MAX_QUIET_HISTORY, QuietHistory, history_bonus}, nnue::NnueState, transposition::{
+        TTNodeType::{self, EXACT, LOWER, UPPER}, Table, TableEntry,
     },
 };
 
@@ -493,6 +493,27 @@ impl MovePicker {
     }
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum NodeType {
+    CUT,
+    ALL, 
+    PV,
+}
+
+impl NodeType {
+    fn is_pv(self) -> bool {
+        self == Self::PV
+    }
+
+    fn first_child(self) -> Self {
+        match self {
+            Self::PV => Self::PV,
+            Self::CUT => Self::ALL,
+            Self::ALL => Self::CUT
+        }
+    }
+}
+
 const DUMMY_NULL: [StackMove; 2] = [
     StackMove{mv: Move{from: cozy_chess::Square::A2, to: cozy_chess::Square::A1, promotion: None}, piece: Pawn, is_null: true}, 
     StackMove{mv: Move{from: cozy_chess::Square::A7, to: cozy_chess::Square::A8, promotion: None}, piece: Pawn, is_null: true}
@@ -740,7 +761,7 @@ impl Engine {
         mv: EngineMove,
         depth: i32,
         ply: i32,
-        pv: bool,
+        expected: NodeType,
         bounds: SearchBounds,
         allow_research: bool,
         first_move: bool,
@@ -755,16 +776,16 @@ impl Engine {
         self.move_stack.push(StackMove { mv: mv.mv, piece: mv.piece_type, is_null: false });
 
         let child = if first_move {
-            self.minimax(&next_board, depth, ply, pv, false, -bounds, context)
+            self.minimax(&next_board, depth, ply, expected.first_child(), false, -bounds, context)
         } else {
             let null_bounds = SearchBounds {
                 alpha: bounds.alpha,
                 beta: bounds.alpha + 1,
             };
 
-            match self.minimax(&next_board, depth, ply, false, false, -null_bounds, context) {
+            match self.minimax(&next_board, depth, ply, NodeType::CUT, false, -null_bounds, context) {
                 Some(score) if -score > bounds.alpha && -score < bounds.beta && allow_research => {
-                    self.minimax(&next_board, depth, ply, pv, false, -bounds, context)
+                    self.minimax(&next_board, depth, ply, expected.first_child(), false, -bounds, context)
                 }
                 child => child,
             }
@@ -780,13 +801,15 @@ impl Engine {
     fn minimax(
         &mut self,
         board: &Board,
-        depth: i32,
+        mut depth: i32,
         ply: i32,
-        pv: bool,
+        expected: NodeType,
         null_position: bool,
         mut bounds: SearchBounds,
         context: &mut SearchContext,
     ) -> Option<i32> {
+        let pv = expected.is_pv();
+
         if depth <= 0 {
             return self.quiesce(board, ply, bounds, context);
         }
@@ -872,7 +895,7 @@ impl Engine {
                 &new_board,
                 depth - r,
                 ply+1,
-                false,
+                NodeType::ALL,
                 true,
                 null_bounds,
                 context,
@@ -884,6 +907,11 @@ impl Engine {
             };
         }
 
+        // iir
+        // if !in_check && expected != NodeType::ALL && depth >= 6 && tt_move.is_none() {
+        //     depth -= 1;
+        // }
+
         let moves = self.generate_moves(board, tt_move);
         let stm_index = if board.side_to_move() == White { 0 } else { 1 };
         let mut picker = MovePicker::new(moves);
@@ -894,30 +922,39 @@ impl Engine {
 
         let mut moves_played = 0;
         let lmp_cap = 5 + 3*depth*depth;
+
+        // let mut actual = NodeType::ALL;
         while let Some(mv) = picker.next() {
             moves_played += 1;
 
+            // lmp
             if !pv && !in_check && moves_played >= lmp_cap && !mv.is_capture && !mv.promotion {
                 picker.stage = Stage::BadCaptures;
                 continue;
-            }
+            }   
 
-            let lmr_depth = if depth <= 3 || first_move || mv.is_capture || mv.promotion || in_check {
-                0
-            } else {
-                let res = 
-                (0.99 + (depth as f32).ln() * (moves_played as f32).ln() / 3.14) as i32
-                // - (correction.abs() >= 64) as i32
-                ;
-                res.max(0)
-            };
+            // lmr
+            let mut lmr_depth = 0;
+            if depth >= 2 && moves_played >= 2 && !mv.is_capture && !mv.promotion && !in_check {
+                // base formula
+                lmr_depth += (1024.0 * (0.99 + (depth as f32).ln() * (moves_played as f32).ln() / 3.14)) as i32;
+
+                // reduce more on a cutnode
+                // lmr_depth += ((expected == CUT) as i32) * 500;
+
+                // reduce less for a check
+                // lmr_depth -= ((in_check) as i32) * 800;
+                
+                
+                lmr_depth = lmr_depth.max(0) / 1024;
+            }
 
             let mut x = self.search_move(
                 board,
                 mv,
                 depth - 1 - lmr_depth,
                 ply + 1,
-                pv,
+                expected,
                 bounds,
                 lmr_depth == 0,
                 first_move,
@@ -930,7 +967,7 @@ impl Engine {
                     mv,
                     depth - 1,
                     ply + 1,
-                    pv,
+                    expected,
                     bounds,
                     true,
                     first_move,
@@ -943,10 +980,12 @@ impl Engine {
                 best_move = Some(mv);
                 if x > bounds.alpha {
                     bounds.alpha = x;
+                    // actual = NodeType::PV;
                 }
             }
 
             if x >= bounds.beta {
+                // actual = NodeType::CUT;
                 if !mv.is_capture && !mv.promotion {
                     self.quiet_history.update(stm_index, mv.mv.from, mv.mv.to, history_bonus(depth));
 
@@ -996,7 +1035,7 @@ impl Engine {
         static_eval += correction;
 
         if !in_check && best_move.is_none_or(|mv| !mv.is_capture && !mv.promotion) &&
-            !(node_type == NodeType::LOWER && result <= static_eval) && !(node_type == NodeType::UPPER && result >= static_eval)
+            !(node_type == TTNodeType::LOWER && result <= static_eval) && !(node_type == TTNodeType::UPPER && result >= static_eval)
             && result.abs() <= 95_000
         {
             let bonus = (result - static_eval) * depth / 4;
@@ -1045,7 +1084,7 @@ impl Engine {
                 mv,
                 depth - 1,
                 1,
-                true,
+                NodeType::PV,
                 bounds,
                 true,
                 first_move,
