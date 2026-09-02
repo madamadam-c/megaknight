@@ -882,7 +882,7 @@ impl Engine {
         //     return Some(static_eval);
         // }
 
-        let rfp_margin = (if improving {65} else {123}) * depth; // + correction.abs() / 2;
+        let rfp_margin = (if improving {123} else {123}) * depth; // + correction.abs() / 2;
         if !in_check && !pv && depth <= 5 && static_eval - rfp_margin >= bounds.beta {
             return Some(static_eval);
         }
@@ -935,7 +935,7 @@ impl Engine {
         let mut first_move = true;
 
         let mut moves_played = 0;
-        let lmp_cap = 5 + 3*depth*depth;
+        let lmp_cap = (5 + 3*depth*depth) / (2 - improving as i32);
 
         // let mut actual = NodeType::ALL;
         while let Some(mv) = picker.next() {
