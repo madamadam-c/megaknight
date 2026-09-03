@@ -553,7 +553,7 @@ impl Engine {
     }
 
     pub fn new_game(&mut self) {
-        // self.pawn_correction_history.clear();
+        self.pawn_correction_history.clear();
         // self.stm_non_pawn_correction_history.clear();
         // self.nstm_non_pawn_correction_history.clear();
         // self.minor_correction_history.clear();
@@ -568,7 +568,7 @@ impl Engine {
     }
 
     pub fn get_correction_value(&self, board: &Board) -> i32 {
-        // let pawn_hash = board.pawn_hash(board.side_to_move()) ^ board.pawn_hash(!board.side_to_move());
+        let pawn_hash = board.pawn_hash(board.side_to_move()) ^ board.pawn_hash(!board.side_to_move());
         // let minor_hash = board.minor_piece_hash(board.side_to_move()) ^ board.minor_piece_hash(!board.side_to_move());
         // let major_hash = board.major_piece_hash(board.side_to_move()) ^ board.major_piece_hash(!board.side_to_move());
         // let stm_non_pawn_hash = board.non_pawn_hash(board.side_to_move());
@@ -576,7 +576,7 @@ impl Engine {
 
         let correction = (
             0 // just for formatting reasons
-        //     + 0*self.pawn_correction_history.get(board.side_to_move() as usize, pawn_hash)
+            + self.pawn_correction_history.get(board.side_to_move() as usize, pawn_hash)
         //     + 0*self.minor_correction_history.get(board.side_to_move() as usize, minor_hash)
         //     + 0*self.major_correction_history.get(board.side_to_move() as usize, major_hash)
         //     + 0*self.stm_non_pawn_correction_history.get(board.side_to_move() as usize, stm_non_pawn_hash)
@@ -1041,27 +1041,27 @@ impl Engine {
         };
 
         // update correction histories
-        // static_eval -= correction;
-        // correction = self.get_correction_value(board);
-        // static_eval += correction;
+        static_eval -= correction;
+        correction = self.get_correction_value(board);
+        static_eval += correction;
 
-        // if !in_check && best_move.is_none_or(|mv| !mv.is_capture && !mv.promotion) &&
-        //     !(node_type == TTNodeType::LOWER && result <= static_eval) && !(node_type == TTNodeType::UPPER && result >= static_eval)
-        //     && result.abs() <= 95_000
-        // {
-        //     let bonus = (result - static_eval) * depth / 4;
-        //     let pawn_hash = board.pawn_hash(board.side_to_move()) ^ board.pawn_hash(!board.side_to_move());
-        //     let minor_hash = board.minor_piece_hash(board.side_to_move()) ^ board.minor_piece_hash(!board.side_to_move());
-        //     let major_hash = board.major_piece_hash(board.side_to_move()) ^ board.major_piece_hash(!board.side_to_move());
-        //     let stm_non_pawn_hash = board.non_pawn_hash(board.side_to_move());
-        //     let nstm_non_pawn_hash = board.non_pawn_hash(!board.side_to_move());
+        if !in_check && best_move.is_none_or(|mv| !mv.is_capture && !mv.promotion) &&
+            !(node_type == TTNodeType::LOWER && result <= static_eval) && !(node_type == TTNodeType::UPPER && result >= static_eval)
+            && result.abs() <= 95_000
+        {
+            let bonus = (result - static_eval) * depth / 4;
+            let pawn_hash = board.pawn_hash(board.side_to_move()) ^ board.pawn_hash(!board.side_to_move());
+            // let minor_hash = board.minor_piece_hash(board.side_to_move()) ^ board.minor_piece_hash(!board.side_to_move());
+            // let major_hash = board.major_piece_hash(board.side_to_move()) ^ board.major_piece_hash(!board.side_to_move());
+            // let stm_non_pawn_hash = board.non_pawn_hash(board.side_to_move());
+            // let nstm_non_pawn_hash = board.non_pawn_hash(!board.side_to_move());
 
-        //     self.pawn_correction_history.update(stm_index, pawn_hash, bonus);
-        //     self.minor_correction_history.update(stm_index, minor_hash, bonus);
-        //     self.major_correction_history.update(stm_index, major_hash, bonus);
-        //     self.stm_non_pawn_correction_history.update(stm_index, stm_non_pawn_hash, bonus);
-        //     self.nstm_non_pawn_correction_history.update(stm_index, nstm_non_pawn_hash, bonus);
-        // }
+            self.pawn_correction_history.update(stm_index, pawn_hash, bonus);
+            // self.minor_correction_history.update(stm_index, minor_hash, bonus);
+            // self.major_correction_history.update(stm_index, major_hash, bonus);
+            // self.stm_non_pawn_correction_history.update(stm_index, stm_non_pawn_hash, bonus);
+            // self.nstm_non_pawn_correction_history.update(stm_index, nstm_non_pawn_hash, bonus);
+        }
 
         self.tt.insert(
             key,
