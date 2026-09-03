@@ -22,11 +22,13 @@ pub fn history_bonus(depth: i32) -> i32 {
 
 pub const CONTHIST_PLY: usize = 1;
 pub const CORRHIST_SIZE: usize = 8192;
+pub const PAWNHIST_SIZE: usize = 512;
 
 type QHEntry = [[[i32; 64]; 64]; 2];
 type ContHistEntry = [[[[[i32; 6]; 64]; 6]; 64]; 2];
 type CaptureHistEntry = [[[[i32; 6]; 6]; 64]; 2];
 type CorrHistEntry = [[i16; CORRHIST_SIZE]; 2];
+type PawnHistEntry = [[[[i32; 6]; 64]; PAWNHIST_SIZE]; 2];
 
 pub struct QuietHistory {
     history: Box<QHEntry>
@@ -139,3 +141,31 @@ impl CorrectionHistory {
         );
     }
 }
+
+pub struct PawnHistory {
+    history: Box<PawnHistEntry>
+}
+
+impl PawnHistory {
+    pub fn new() -> Self {
+        Self {
+            history: Box::new([[[[0i32; 6]; 64]; PAWNHIST_SIZE]; 2])
+        }
+    }
+
+    pub fn clear(&mut self) {
+        self.history = Box::new([[[[0i32; 6]; 64]; PAWNHIST_SIZE]; 2])
+    }
+
+    pub fn get(&self, stm: usize, pawn_hash: u64, to: Square, piece_type: Piece) -> i32 {
+        self.history[stm][(pawn_hash as usize) & (PAWNHIST_SIZE - 1)][to as usize][piece_type as usize]
+    }
+
+    pub fn update(&mut self, stm: usize, pawn_hash: u64, to: Square, piece_type: Piece, bonus: i32) {
+        update_history(
+            &mut self.history[stm][(pawn_hash as usize) & (PAWNHIST_SIZE - 1)][to as usize][piece_type as usize],
+            bonus,
+            MAX_QUIET_HISTORY
+        );
+    }
+}   

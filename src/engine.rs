@@ -10,7 +10,7 @@ use cozy_chess::{
 };
 
 use crate::{
-    engine::NodeType::CUT, evaluate::{static_exchange_evaluation, value}, history::{CONTHIST_PLY, CaptureHistory, ContinuationHistory, CorrectionHistory, MAX_QUIET_HISTORY, QuietHistory, history_bonus}, nnue::NnueState, transposition::{
+    engine::NodeType::CUT, evaluate::{static_exchange_evaluation, value}, history::{CONTHIST_PLY, CaptureHistory, ContinuationHistory, CorrectionHistory, MAX_QUIET_HISTORY, PawnHistory, QuietHistory, history_bonus}, nnue::NnueState, transposition::{
         TTNodeType::{self, EXACT, LOWER, UPPER}, Table, TableEntry,
     },
 };
@@ -530,6 +530,7 @@ pub struct Engine {
     nstm_non_pawn_correction_history: CorrectionHistory,
     minor_correction_history: CorrectionHistory,
     major_correction_history: CorrectionHistory,
+    pawn_history: PawnHistory,
     move_stack: Vec<StackMove>,
 }
 
@@ -546,6 +547,7 @@ impl Engine {
             nstm_non_pawn_correction_history: CorrectionHistory::new(),
             minor_correction_history: CorrectionHistory::new(),
             major_correction_history: CorrectionHistory::new(),
+            pawn_history: PawnHistory::new(),
             move_stack: Vec::with_capacity(256),
         }
     }
@@ -557,6 +559,7 @@ impl Engine {
         self.minor_correction_history.clear();
         self.major_correction_history.clear();
         self.continuation_history.clear();
+        self.pawn_history.clear();
         self.tt.clear();
     }
 
@@ -584,6 +587,7 @@ impl Engine {
 
     fn generate_moves(&self, board: &Board, tt_move: Option<Move>) -> MoveList {
         let mut moves = MoveList::new(false);
+        let pawn_hash = board.pawn_hash(board.side_to_move()) ^ board.pawn_hash(!board.side_to_move());
 
         board.generate_moves(|moves_for_piece| {
             for mv in moves_for_piece {
@@ -594,6 +598,7 @@ impl Engine {
                     emv.history = self.capture_history.get(board.side_to_move() as usize, mv.to, emv.piece_type, emv.target_type.unwrap());
                 } else {
                     let quiet_history = self.quiet_history.get(board.side_to_move() as usize, mv.from, mv.to);
+                    let pawn_history = self.pawn_history.get(board.side_to_move() as usize, pawn_hash, mv.to, emv.piece_type);
                     let mut continuation_history = 0;
 
                     // for ply in 0..min(self.move_stack.len(), CONTHIST_PLY) {
@@ -603,7 +608,7 @@ impl Engine {
                     //     );
                     // }
                     
-                    emv.history = quiet_history + continuation_history;
+                    emv.history = quiet_history + pawn_history + continuation_history;
                 }
 
                 if emv.is_capture || emv.is_tt {
@@ -989,11 +994,15 @@ impl Engine {
             if x >= bounds.beta {
                 // actual = NodeType::CUT;
                 if !mv.is_capture && !mv.promotion {
+                    let pawn_hash = board.pawn_hash(board.side_to_move()) ^ board.pawn_hash(!board.side_to_move());
+                    
                     self.quiet_history.update(stm_index, mv.mv.from, mv.mv.to, history_bonus(depth));
+                    self.pawn_history.update(stm_index, pawn_hash, mv.mv.to, mv.piece_type, history_bonus(depth));
 
                     for mv2 in picker.tried_quiets() {
                         if mv2.mv != mv.mv {
                             self.quiet_history.update(stm_index,mv2.mv.from, mv2.mv.to, -history_bonus(depth) / 4);
+                            self.pawn_history.update(stm_index, pawn_hash, mv2.mv.to, mv2.piece_type, -history_bonus(depth) / 4);
                         }
                     }
 
