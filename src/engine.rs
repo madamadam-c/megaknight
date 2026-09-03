@@ -601,12 +601,12 @@ impl Engine {
                     let pawn_history = 0; //self.pawn_history.get(board.side_to_move() as usize, pawn_hash, mv.to, emv.piece_type);
                     let mut continuation_history = 0;
 
-                    // for ply in 0..min(self.move_stack.len(), CONTHIST_PLY) {
-                    //     let prev = &self.move_stack[self.move_stack.len()-ply-1];
-                    //     continuation_history += self.continuation_history.get(
-                    //         ply, board.side_to_move() as usize, prev.mv.to, prev.piece, mv.to, emv.piece_type
-                    //     );
-                    // }
+                    for ply in 0..min(self.move_stack.len(), CONTHIST_PLY) {
+                        let prev = &self.move_stack[self.move_stack.len()-ply-1];
+                        continuation_history += self.continuation_history.get(
+                            ply, board.side_to_move() as usize, prev.mv.to, prev.piece, mv.to, emv.piece_type
+                        );
+                    }
                     
                     emv.history = quiet_history + pawn_history + continuation_history;
                 }
@@ -1014,7 +1014,7 @@ impl Engine {
                     
                         for mv2 in picker.tried_quiets() {
                             if mv2.mv == mv.mv {continue;}
-                            self.continuation_history.update(ply, stm_index, prev.mv.to, prev.piece, mv2.mv.to, mv2.piece_type, -history_bonus(depth)/4);
+                            self.continuation_history.update(ply, stm_index, prev.mv.to, prev.piece, mv2.mv.to, mv2.piece_type, -history_bonus(depth));
                         }
                     }
                 } else if mv.is_capture {
