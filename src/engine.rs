@@ -553,13 +553,13 @@ impl Engine {
     }
 
     pub fn new_game(&mut self) {
-        self.pawn_correction_history.clear();
-        self.stm_non_pawn_correction_history.clear();
-        self.nstm_non_pawn_correction_history.clear();
-        self.minor_correction_history.clear();
-        self.major_correction_history.clear();
-        self.continuation_history.clear();
-        self.pawn_history.clear();
+        // self.pawn_correction_history.clear();
+        // self.stm_non_pawn_correction_history.clear();
+        // self.nstm_non_pawn_correction_history.clear();
+        // self.minor_correction_history.clear();
+        // self.major_correction_history.clear();
+        // self.continuation_history.clear();
+        // self.pawn_history.clear();
         self.tt.clear();
     }
 
@@ -568,26 +568,26 @@ impl Engine {
     }
 
     pub fn get_correction_value(&self, board: &Board) -> i32 {
-        let pawn_hash = board.pawn_hash(board.side_to_move()) ^ board.pawn_hash(!board.side_to_move());
-        let minor_hash = board.minor_piece_hash(board.side_to_move()) ^ board.minor_piece_hash(!board.side_to_move());
-        let major_hash = board.major_piece_hash(board.side_to_move()) ^ board.major_piece_hash(!board.side_to_move());
-        let stm_non_pawn_hash = board.non_pawn_hash(board.side_to_move());
-        let nstm_non_pawn_hash = board.non_pawn_hash(!board.side_to_move());
+        // let pawn_hash = board.pawn_hash(board.side_to_move()) ^ board.pawn_hash(!board.side_to_move());
+        // let minor_hash = board.minor_piece_hash(board.side_to_move()) ^ board.minor_piece_hash(!board.side_to_move());
+        // let major_hash = board.major_piece_hash(board.side_to_move()) ^ board.major_piece_hash(!board.side_to_move());
+        // let stm_non_pawn_hash = board.non_pawn_hash(board.side_to_move());
+        // let nstm_non_pawn_hash = board.non_pawn_hash(!board.side_to_move());
 
         let correction = (
             0 // just for formatting reasons
-            + 0*self.pawn_correction_history.get(board.side_to_move() as usize, pawn_hash)
-            + 0*self.minor_correction_history.get(board.side_to_move() as usize, minor_hash)
-            + 0*self.major_correction_history.get(board.side_to_move() as usize, major_hash)
-            + 0*self.stm_non_pawn_correction_history.get(board.side_to_move() as usize, stm_non_pawn_hash)
-            + 0*self.nstm_non_pawn_correction_history.get(board.side_to_move() as usize, nstm_non_pawn_hash)
+        //     + 0*self.pawn_correction_history.get(board.side_to_move() as usize, pawn_hash)
+        //     + 0*self.minor_correction_history.get(board.side_to_move() as usize, minor_hash)
+        //     + 0*self.major_correction_history.get(board.side_to_move() as usize, major_hash)
+        //     + 0*self.stm_non_pawn_correction_history.get(board.side_to_move() as usize, stm_non_pawn_hash)
+        //     + 0*self.nstm_non_pawn_correction_history.get(board.side_to_move() as usize, nstm_non_pawn_hash)
         ) / 64;
         return correction;
     }
 
     fn generate_moves(&self, board: &Board, tt_move: Option<Move>) -> MoveList {
         let mut moves = MoveList::new(false);
-        let pawn_hash = board.pawn_hash(board.side_to_move()) ^ board.pawn_hash(!board.side_to_move());
+        // let pawn_hash = board.pawn_hash(board.side_to_move()) ^ board.pawn_hash(!board.side_to_move());
 
         board.generate_moves(|moves_for_piece| {
             for mv in moves_for_piece {
@@ -598,8 +598,8 @@ impl Engine {
                     emv.history = self.capture_history.get(board.side_to_move() as usize, mv.to, emv.piece_type, emv.target_type.unwrap());
                 } else {
                     let quiet_history = self.quiet_history.get(board.side_to_move() as usize, mv.from, mv.to);
-                    let pawn_history = 0; //self.pawn_history.get(board.side_to_move() as usize, pawn_hash, mv.to, emv.piece_type);
-                    let mut continuation_history = 0;
+                    // let pawn_history = self.pawn_history.get(board.side_to_move() as usize, pawn_hash, mv.to, emv.piece_type);
+                    // let mut continuation_history = 0;
 
                     // for ply in 0..min(self.move_stack.len(), CONTHIST_PLY) {
                     //     let prev = &self.move_stack[self.move_stack.len()-ply-1];
@@ -608,7 +608,7 @@ impl Engine {
                     //     );
                     // }
                     
-                    emv.history = quiet_history + pawn_history + continuation_history;
+                    emv.history = quiet_history; // + pawn_history + continuation_history;
                 }
 
                 if emv.is_capture || emv.is_tt {
@@ -648,7 +648,7 @@ impl Engine {
                 let mut emv = EngineMove::new(board, mv, moves_for_piece.piece, false);
 
                 if emv.is_capture {
-                    emv.history = self.capture_history.get(board.side_to_move() as usize, mv.to, emv.piece_type, emv.target_type.unwrap());
+                    // emv.history = self.capture_history.get(board.side_to_move() as usize, mv.to, emv.piece_type, emv.target_type.unwrap());
                     emv.see_score = static_exchange_evaluation(board, &emv);
                     if emv.see_score >= 0 {
                         moves.good_captures.push(emv);
@@ -994,7 +994,7 @@ impl Engine {
             if x >= bounds.beta {
                 // actual = NodeType::CUT;
                 if !mv.is_capture && !mv.promotion {
-                    let pawn_hash = board.pawn_hash(board.side_to_move()) ^ board.pawn_hash(!board.side_to_move());
+                    // let pawn_hash = board.pawn_hash(board.side_to_move()) ^ board.pawn_hash(!board.side_to_move());
                     
                     self.quiet_history.update(stm_index, mv.mv.from, mv.mv.to, history_bonus(depth));
                     // self.pawn_history.update(stm_index, pawn_hash, mv.mv.to, mv.piece_type, history_bonus(depth));
@@ -1002,27 +1002,27 @@ impl Engine {
                     for mv2 in picker.tried_quiets() {
                         if mv2.mv != mv.mv {
                             self.quiet_history.update(stm_index,mv2.mv.from, mv2.mv.to, -history_bonus(depth));
-                            // self.pawn_history.update(stm_index, pawn_hash, mv2.mv.to, mv2.piece_type, -history_bonus(depth) / 4);
+                            // self.pawn_history.update(stm_index, pawn_hash, mv2.mv.to, mv2.piece_type, -history_bonus(depth));
                         }
                     }
 
-                    for ply in 0..min(self.move_stack.len(), CONTHIST_PLY) {
-                        let prev = &self.move_stack[self.move_stack.len()-ply-1];
-                        if prev.is_null {continue;}
+                    // for ply in 0..min(self.move_stack.len(), CONTHIST_PLY) {
+                    //     let prev = &self.move_stack[self.move_stack.len()-ply-1];
+                    //     if prev.is_null {continue;}
 
-                        self.continuation_history.update(ply, stm_index, prev.mv.to, prev.piece, mv.mv.to, mv.piece_type, history_bonus(depth));
+                    //     self.continuation_history.update(ply, stm_index, prev.mv.to, prev.piece, mv.mv.to, mv.piece_type, history_bonus(depth));
                     
-                        for mv2 in picker.tried_quiets() {
-                            if mv2.mv == mv.mv {continue;}
-                            self.continuation_history.update(ply, stm_index, prev.mv.to, prev.piece, mv2.mv.to, mv2.piece_type, -history_bonus(depth)/4);
-                        }
-                    }
+                    //     for mv2 in picker.tried_quiets() {
+                    //         if mv2.mv == mv.mv {continue;}
+                    //         self.continuation_history.update(ply, stm_index, prev.mv.to, prev.piece, mv2.mv.to, mv2.piece_type, -history_bonus(depth));
+                    //     }
+                    // }
                 } else if mv.is_capture {
-                    self.capture_history.update(stm_index, mv.mv.to, mv.piece_type, mv.target_type.unwrap(), history_bonus(depth));
-                    for mv2 in picker.tried_captures {
-                        if mv2.mv == mv.mv {continue;}
-                        self.capture_history.update(stm_index, mv2.mv.to, mv2.piece_type, mv2.target_type.unwrap(), -history_bonus(depth)/4);
-                    }
+                    // self.capture_history.update(stm_index, mv.mv.to, mv.piece_type, mv.target_type.unwrap(), history_bonus(depth));
+                    // for mv2 in picker.tried_captures {
+                    //     if mv2.mv == mv.mv {continue;}
+                    //     self.capture_history.update(stm_index, mv2.mv.to, mv2.piece_type, mv2.target_type.unwrap(), -history_bonus(depth)/4);
+                    // }
                 }
                 break;
             }
@@ -1041,27 +1041,27 @@ impl Engine {
         };
 
         // update correction histories
-        static_eval -= correction;
-        correction = self.get_correction_value(board);
-        static_eval += correction;
+        // static_eval -= correction;
+        // correction = self.get_correction_value(board);
+        // static_eval += correction;
 
-        if !in_check && best_move.is_none_or(|mv| !mv.is_capture && !mv.promotion) &&
-            !(node_type == TTNodeType::LOWER && result <= static_eval) && !(node_type == TTNodeType::UPPER && result >= static_eval)
-            && result.abs() <= 95_000
-        {
-            let bonus = (result - static_eval) * depth / 4;
-            let pawn_hash = board.pawn_hash(board.side_to_move()) ^ board.pawn_hash(!board.side_to_move());
-            let minor_hash = board.minor_piece_hash(board.side_to_move()) ^ board.minor_piece_hash(!board.side_to_move());
-            let major_hash = board.major_piece_hash(board.side_to_move()) ^ board.major_piece_hash(!board.side_to_move());
-            let stm_non_pawn_hash = board.non_pawn_hash(board.side_to_move());
-            let nstm_non_pawn_hash = board.non_pawn_hash(!board.side_to_move());
+        // if !in_check && best_move.is_none_or(|mv| !mv.is_capture && !mv.promotion) &&
+        //     !(node_type == TTNodeType::LOWER && result <= static_eval) && !(node_type == TTNodeType::UPPER && result >= static_eval)
+        //     && result.abs() <= 95_000
+        // {
+        //     let bonus = (result - static_eval) * depth / 4;
+        //     let pawn_hash = board.pawn_hash(board.side_to_move()) ^ board.pawn_hash(!board.side_to_move());
+        //     let minor_hash = board.minor_piece_hash(board.side_to_move()) ^ board.minor_piece_hash(!board.side_to_move());
+        //     let major_hash = board.major_piece_hash(board.side_to_move()) ^ board.major_piece_hash(!board.side_to_move());
+        //     let stm_non_pawn_hash = board.non_pawn_hash(board.side_to_move());
+        //     let nstm_non_pawn_hash = board.non_pawn_hash(!board.side_to_move());
 
-            self.pawn_correction_history.update(stm_index, pawn_hash, bonus);
-            self.minor_correction_history.update(stm_index, minor_hash, bonus);
-            self.major_correction_history.update(stm_index, major_hash, bonus);
-            self.stm_non_pawn_correction_history.update(stm_index, stm_non_pawn_hash, bonus);
-            self.nstm_non_pawn_correction_history.update(stm_index, nstm_non_pawn_hash, bonus);
-        }
+        //     self.pawn_correction_history.update(stm_index, pawn_hash, bonus);
+        //     self.minor_correction_history.update(stm_index, minor_hash, bonus);
+        //     self.major_correction_history.update(stm_index, major_hash, bonus);
+        //     self.stm_non_pawn_correction_history.update(stm_index, stm_non_pawn_hash, bonus);
+        //     self.nstm_non_pawn_correction_history.update(stm_index, nstm_non_pawn_hash, bonus);
+        // }
 
         self.tt.insert(
             key,
