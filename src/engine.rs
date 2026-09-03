@@ -554,8 +554,8 @@ impl Engine {
 
     pub fn new_game(&mut self) {
         self.pawn_correction_history.clear();
-        // self.stm_non_pawn_correction_history.clear();
-        // self.nstm_non_pawn_correction_history.clear();
+        self.stm_non_pawn_correction_history.clear();
+        self.nstm_non_pawn_correction_history.clear();
         // self.minor_correction_history.clear();
         // self.major_correction_history.clear();
         // self.continuation_history.clear();
@@ -571,16 +571,16 @@ impl Engine {
         let pawn_hash = board.pawn_hash(board.side_to_move()) ^ board.pawn_hash(!board.side_to_move());
         // let minor_hash = board.minor_piece_hash(board.side_to_move()) ^ board.minor_piece_hash(!board.side_to_move());
         // let major_hash = board.major_piece_hash(board.side_to_move()) ^ board.major_piece_hash(!board.side_to_move());
-        // let stm_non_pawn_hash = board.non_pawn_hash(board.side_to_move());
-        // let nstm_non_pawn_hash = board.non_pawn_hash(!board.side_to_move());
+        let stm_non_pawn_hash = board.non_pawn_hash(board.side_to_move());
+        let nstm_non_pawn_hash = board.non_pawn_hash(!board.side_to_move());
 
         let correction = (
             0 // just for formatting reasons
             + self.pawn_correction_history.get(board.side_to_move() as usize, pawn_hash)
         //     + 0*self.minor_correction_history.get(board.side_to_move() as usize, minor_hash)
         //     + 0*self.major_correction_history.get(board.side_to_move() as usize, major_hash)
-        //     + 0*self.stm_non_pawn_correction_history.get(board.side_to_move() as usize, stm_non_pawn_hash)
-        //     + 0*self.nstm_non_pawn_correction_history.get(board.side_to_move() as usize, nstm_non_pawn_hash)
+            + self.stm_non_pawn_correction_history.get(board.side_to_move() as usize, stm_non_pawn_hash)
+            + self.nstm_non_pawn_correction_history.get(board.side_to_move() as usize, nstm_non_pawn_hash)
         ) / 64;
         return correction;
     }
@@ -1053,14 +1053,14 @@ impl Engine {
             let pawn_hash = board.pawn_hash(board.side_to_move()) ^ board.pawn_hash(!board.side_to_move());
             // let minor_hash = board.minor_piece_hash(board.side_to_move()) ^ board.minor_piece_hash(!board.side_to_move());
             // let major_hash = board.major_piece_hash(board.side_to_move()) ^ board.major_piece_hash(!board.side_to_move());
-            // let stm_non_pawn_hash = board.non_pawn_hash(board.side_to_move());
-            // let nstm_non_pawn_hash = board.non_pawn_hash(!board.side_to_move());
+            let stm_non_pawn_hash = board.non_pawn_hash(board.side_to_move());
+            let nstm_non_pawn_hash = board.non_pawn_hash(!board.side_to_move());
 
             self.pawn_correction_history.update(stm_index, pawn_hash, bonus);
             // self.minor_correction_history.update(stm_index, minor_hash, bonus);
             // self.major_correction_history.update(stm_index, major_hash, bonus);
-            // self.stm_non_pawn_correction_history.update(stm_index, stm_non_pawn_hash, bonus);
-            // self.nstm_non_pawn_correction_history.update(stm_index, nstm_non_pawn_hash, bonus);
+            self.stm_non_pawn_correction_history.update(stm_index, stm_non_pawn_hash, bonus);
+            self.nstm_non_pawn_correction_history.update(stm_index, nstm_non_pawn_hash, bonus);
         }
 
         self.tt.insert(
