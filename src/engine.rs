@@ -560,6 +560,7 @@ impl Engine {
         // self.major_correction_history.clear();
         // self.continuation_history.clear();
         // self.pawn_history.clear();
+        self.quiet_history.clear();
         self.tt.clear();
     }
 
@@ -1148,7 +1149,6 @@ impl Engine {
         let mut depth = 1;
 
         self.move_stack.clear();
-        self.quiet_history.clear();
         self.capture_history.clear();
         self.nnue = NnueState::from_board(&request.board);
 
