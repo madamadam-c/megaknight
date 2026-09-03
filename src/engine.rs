@@ -908,9 +908,9 @@ impl Engine {
         }
 
         // iir
-        // if !in_check && expected != NodeType::ALL && depth >= 6 && tt_move.is_none() {
-        //     depth -= 1;
-        // }
+        if expected != NodeType::ALL && depth >= 7 && tt_move.is_none() {
+            depth -= 1;
+        }
 
         let moves = self.generate_moves(board, tt_move);
         let stm_index = if board.side_to_move() == White { 0 } else { 1 };
