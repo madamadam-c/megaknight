@@ -22,7 +22,7 @@ pub fn history_bonus(depth: i32) -> i32 {
 
 pub const CONTHIST_PLY: usize = 1;
 pub const CORRHIST_SIZE: usize = 8192;
-pub const PAWNHIST_SIZE: usize = 512;
+pub const PAWNHIST_SIZE: usize = 4096;
 
 type QHEntry = [[[i32; 64]; 64]; 2];
 type ContHistEntry = [[[[[i32; 6]; 64]; 6]; 64]; 2];
