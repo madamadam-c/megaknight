@@ -890,7 +890,7 @@ impl Engine {
         //     return Some(static_eval);
         // }
 
-        let rfp_margin = (if improving {65} else {123}) * depth; // + correction.abs() / 2;
+        let rfp_margin = (if improving {93} else {123}) * depth; // + correction.abs() / 2;
         if !in_check && !pv && depth <= 5 && static_eval - rfp_margin >= bounds.beta {
             return Some(static_eval);
         }
