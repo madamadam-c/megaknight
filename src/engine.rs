@@ -532,6 +532,7 @@ pub struct Engine {
     major_correction_history: CorrectionHistory,
     pawn_history: PawnHistory,
     move_stack: Vec<StackMove>,
+    eval_stack: Vec<Option<i32>>,
 }
 
 impl Engine {
@@ -549,6 +550,7 @@ impl Engine {
             major_correction_history: CorrectionHistory::new(),
             pawn_history: PawnHistory::new(),
             move_stack: Vec::with_capacity(256),
+            eval_stack: vec![None; 256],
         }
     }
 
@@ -694,6 +696,8 @@ impl Engine {
         let mut static_eval = self.nnue.evaluate(board.side_to_move());
         let correction = self.get_correction_value(board);
         static_eval += correction;
+
+        self.eval_stack[ply as usize] = Some(static_eval);
 
         if !in_check {
             if static_eval >= bounds.beta {
@@ -868,6 +872,16 @@ impl Engine {
         let mut correction = self.get_correction_value(board);
         static_eval += correction;
 
+        self.eval_stack[ply as usize] = if in_check {None} else {Some(static_eval)};
+
+        let improving = if ply >= 2 && let Some(prev) = self.eval_stack[(ply-2) as usize] {
+            static_eval >= prev
+        } else if ply >= 4 && let Some(prev) = self.eval_stack[(ply-4) as usize] {
+            static_eval >= prev
+        } else {
+            false
+        };
+
         // let razoring_margin = 163 + 41 * depth * depth;
         // if !in_check && !pv && static_eval + razoring_margin < bounds.alpha {
         //     return Some(static_eval);
@@ -926,7 +940,7 @@ impl Engine {
         let mut first_move = true;
 
         let mut moves_played = 0;
-        let lmp_cap = 5 + 3*depth*depth;
+        let lmp_cap = (5 + 3*depth*depth) / (2 - improving as i32);
 
         // let mut actual = NodeType::ALL;
         while let Some(mv) = picker.next() {
@@ -1148,6 +1162,7 @@ impl Engine {
         let mut depth = 1;
 
         self.move_stack.clear();
+        self.eval_stack = vec![None; 256];
         self.quiet_history.clear();
         self.capture_history.clear();
         self.nnue = NnueState::from_board(&request.board);
