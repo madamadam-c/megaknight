@@ -890,7 +890,7 @@ impl Engine {
         //     return Some(static_eval);
         // }
 
-        let rfp_margin = (if improving {93} else {123}) * depth; // + correction.abs() / 2;
+        let rfp_margin = 123 * depth; // + correction.abs() / 2;
         if !in_check && !pv && depth <= 5 && static_eval - rfp_margin >= bounds.beta {
             return Some(static_eval);
         }
@@ -970,6 +970,9 @@ impl Engine {
 
                 // reduce less for pv nodes
                 // lmr_depth -= 500 * pv as i32;
+
+                // reduce more when not improving
+                lmr_depth += 512 * !improving as i32;
                 
                 lmr_depth = lmr_depth.max(0) / 1024;
             }
