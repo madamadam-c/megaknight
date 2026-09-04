@@ -792,9 +792,10 @@ impl Engine {
                 beta: bounds.alpha + 1,
             };
 
-            match self.minimax(&next_board, depth, ply, NodeType::CUT, false, -null_bounds, context) {
+            let child_type = if allow_research && expected == NodeType::CUT {NodeType::ALL} else {NodeType::CUT};
+            match self.minimax(&next_board, depth, ply, child_type, false, -null_bounds, context) {
                 Some(score) if -score > bounds.alpha && -score < bounds.beta && allow_research => {
-                    self.minimax(&next_board, depth, ply, expected.first_child(), false, -bounds, context)
+                    self.minimax(&next_board, depth, ply, NodeType::PV, false, -bounds, context)
                 }
                 child => child,
             }
@@ -874,7 +875,9 @@ impl Engine {
 
         self.eval_stack[ply as usize] = if in_check {None} else {Some(static_eval)};
 
-        let improving = if ply >= 2 && let Some(prev) = self.eval_stack[(ply-2) as usize] {
+        let improving = if in_check {
+            false
+        } else if ply >= 2 && let Some(prev) = self.eval_stack[(ply-2) as usize] {
             static_eval >= prev
         } else if ply >= 4 && let Some(prev) = self.eval_stack[(ply-4) as usize] {
             static_eval >= prev
@@ -887,7 +890,7 @@ impl Engine {
         //     return Some(static_eval);
         // }
 
-        let rfp_margin = 123 * depth; // + correction.abs() / 2;
+        let rfp_margin = (if improving {65} else {123}) * depth; // + correction.abs() / 2;
         if !in_check && !pv && depth <= 5 && static_eval - rfp_margin >= bounds.beta {
             return Some(static_eval);
         }
@@ -940,7 +943,8 @@ impl Engine {
         let mut first_move = true;
 
         let mut moves_played = 0;
-        let lmp_cap = (5 + 3*depth*depth) / (2 - improving as i32);
+        // let lmp_cap = (5 + 3*depth*depth) / (2 - improving as i32);
+        let lmp_cap = 5 + 3*depth*depth;
 
         // let mut actual = NodeType::ALL;
         while let Some(mv) = picker.next() {
