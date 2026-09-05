@@ -959,7 +959,7 @@ impl Engine {
 
             // lmr
             let mut lmr_depth = 0;
-            if depth >= 2 && moves_played >= 2 && !in_check {
+            if depth >= 2 && moves_played >= 2 && is_quiet && !in_check {
                 // base formula [credit for quiet: obsidian on cpw]
                 let lmr_base = if is_quiet {0.99} else {0.35};
                 let lmr_div = if is_quiet {3.14} else {4.76};
@@ -979,9 +979,10 @@ impl Engine {
                 lmr_depth += 512 * !improving as i32;
 
                 // reduce based on history (max reduction is +/- 2 plies)
-                lmr_depth -= 1024 * mv.history / 8192;
+                lmr_depth -= (1024 * mv.history / 8192).clamp(-2048, 2048);
                 
-                lmr_depth = lmr_depth.max(0) / 1024;
+                // don't go directly into qsearch or give negative reduction (ie. extension)
+                lmr_depth = lmr_depth.clamp(0, (depth-2)*1024) / 1024;
             }
 
             let mut x = self.search_move(
