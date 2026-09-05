@@ -959,11 +959,11 @@ impl Engine {
             // lmr
             let mut lmr_depth = 0;
             if depth >= 2 && moves_played >= 2 && !mv.is_capture && !mv.promotion && !in_check {
-                // base formula
+                // base formula [credit: obsidian on cpw]
                 lmr_depth += (1024.0 * (0.99 + (depth as f32).ln() * (moves_played as f32).ln() / 3.14)) as i32;
 
                 // reduce more on a cutnode
-                // lmr_depth += 500 * expected == CUT as i32;
+                lmr_depth += 512 * (expected == CUT) as i32;
 
                 // reduce less for a check
                 // lmr_depth -= 800 * in_check as i32;
