@@ -948,19 +948,23 @@ impl Engine {
 
         // let mut actual = NodeType::ALL;
         while let Some(mv) = picker.next() {
+            let is_quiet = !mv.is_capture && !mv.promotion;
             moves_played += 1;
 
             // lmp
-            if !pv && !in_check && moves_played >= lmp_cap && !mv.is_capture && !mv.promotion {
+            if !pv && !in_check && moves_played >= lmp_cap && is_quiet {
                 picker.stage = Stage::BadCaptures;
                 continue;
             }   
 
             // lmr
             let mut lmr_depth = 0;
-            if depth >= 2 && moves_played >= 2 && !mv.is_capture && !mv.promotion && !in_check {
-                // base formula [credit: obsidian on cpw]
-                lmr_depth += (1024.0 * (0.99 + (depth as f32).ln() * (moves_played as f32).ln() / 3.14)) as i32;
+            if depth >= 2 && moves_played >= 2 && !in_check {
+                // base formula [credit for quiet: obsidian on cpw]
+                let lmr_base = if is_quiet {0.99} else {0.35};
+                let lmr_div = if is_quiet {3.14} else {4.76};
+
+                lmr_depth += (1024.0 * (lmr_base + (depth as f32).ln() * (moves_played as f32).ln() / lmr_div)) as i32;
 
                 // reduce more on a cutnode
                 // lmr_depth += 512 * (expected == CUT) as i32;
@@ -969,7 +973,7 @@ impl Engine {
                 // lmr_depth -= 800 * in_check as i32;
 
                 // reduce less for pv nodes
-                lmr_depth -= 512 * pv as i32;
+                // lmr_depth -= 500 * pv as i32;
 
                 // reduce more when not improving
                 lmr_depth += 512 * !improving as i32;
@@ -1017,7 +1021,7 @@ impl Engine {
 
             if x >= bounds.beta {
                 // actual = NodeType::CUT;
-                if !mv.is_capture && !mv.promotion {
+                if is_quiet {
                     // let pawn_hash = board.pawn_hash(board.side_to_move()) ^ board.pawn_hash(!board.side_to_move());
                     
                     self.quiet_history.update(stm_index, mv.mv.from, mv.mv.to, history_bonus(depth));
