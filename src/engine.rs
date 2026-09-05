@@ -963,7 +963,7 @@ impl Engine {
                 lmr_depth += (1024.0 * (0.99 + (depth as f32).ln() * (moves_played as f32).ln() / 3.14)) as i32;
 
                 // reduce more on a cutnode
-                lmr_depth += 512 * (expected == CUT) as i32;
+                // lmr_depth += 512 * (expected == CUT) as i32;
 
                 // reduce less for a check
                 // lmr_depth -= 800 * in_check as i32;
@@ -973,6 +973,9 @@ impl Engine {
 
                 // reduce more when not improving
                 lmr_depth += 512 * !improving as i32;
+
+                // reduce based on history (max reduction is +/- 2 plies)
+                lmr_depth -= 1024 * mv.history / 8192;
                 
                 lmr_depth = lmr_depth.max(0) / 1024;
             }
