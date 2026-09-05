@@ -532,6 +532,7 @@ pub struct Engine {
     major_correction_history: CorrectionHistory,
     pawn_history: PawnHistory,
     move_stack: Vec<StackMove>,
+    eval_stack: Vec<Option<i32>>,
 }
 
 impl Engine {
@@ -549,6 +550,7 @@ impl Engine {
             major_correction_history: CorrectionHistory::new(),
             pawn_history: PawnHistory::new(),
             move_stack: Vec::with_capacity(256),
+            eval_stack: vec![None; 256],
         }
     }
 
@@ -695,6 +697,8 @@ impl Engine {
         let correction = self.get_correction_value(board);
         static_eval += correction;
 
+        self.eval_stack[ply as usize] = Some(static_eval);
+
         if !in_check {
             if static_eval >= bounds.beta {
                 if board.generate_moves(|_| true) {
@@ -788,9 +792,10 @@ impl Engine {
                 beta: bounds.alpha + 1,
             };
 
-            match self.minimax(&next_board, depth, ply, NodeType::CUT, false, -null_bounds, context) {
+            let child_type = if allow_research && expected == NodeType::CUT {NodeType::ALL} else {NodeType::CUT};
+            match self.minimax(&next_board, depth, ply, child_type, false, -null_bounds, context) {
                 Some(score) if -score > bounds.alpha && -score < bounds.beta && allow_research => {
-                    self.minimax(&next_board, depth, ply, expected.first_child(), false, -bounds, context)
+                    self.minimax(&next_board, depth, ply, NodeType::PV, false, -bounds, context)
                 }
                 child => child,
             }
@@ -868,6 +873,18 @@ impl Engine {
         let mut correction = self.get_correction_value(board);
         static_eval += correction;
 
+        self.eval_stack[ply as usize] = if in_check {None} else {Some(static_eval)};
+
+        let improving = if in_check {
+            false
+        } else if ply >= 2 && let Some(prev) = self.eval_stack[(ply-2) as usize] {
+            static_eval >= prev
+        } else if ply >= 4 && let Some(prev) = self.eval_stack[(ply-4) as usize] {
+            static_eval >= prev
+        } else {
+            false
+        };
+
         // let razoring_margin = 163 + 41 * depth * depth;
         // if !in_check && !pv && static_eval + razoring_margin < bounds.alpha {
         //     return Some(static_eval);
@@ -926,6 +943,7 @@ impl Engine {
         let mut first_move = true;
 
         let mut moves_played = 0;
+        // let lmp_cap = (5 + 3*depth*depth) / (2 - improving as i32);
         let lmp_cap = 5 + 3*depth*depth;
 
         // let mut actual = NodeType::ALL;
@@ -952,6 +970,9 @@ impl Engine {
 
                 // reduce less for pv nodes
                 // lmr_depth -= 500 * pv as i32;
+
+                // reduce more when not improving
+                lmr_depth += 512 * !improving as i32;
                 
                 lmr_depth = lmr_depth.max(0) / 1024;
             }
@@ -1148,6 +1169,7 @@ impl Engine {
         let mut depth = 1;
 
         self.move_stack.clear();
+        self.eval_stack = vec![None; 256];
         self.quiet_history.clear();
         self.capture_history.clear();
         self.nnue = NnueState::from_board(&request.board);
