@@ -969,7 +969,7 @@ impl Engine {
                 // lmr_depth -= 800 * in_check as i32;
 
                 // reduce less for pv nodes
-                // lmr_depth -= 500 * pv as i32;
+                lmr_depth -= 512 * pv as i32;
 
                 // reduce more when not improving
                 lmr_depth += 512 * !improving as i32;
