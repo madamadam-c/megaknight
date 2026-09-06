@@ -16,7 +16,7 @@ pub fn history_bonus(depth: i32) -> i32 {
     depth.saturating_mul(depth)
 }
 
-pub const CONTHIST_PLY: usize = 1;
+pub const CONTHIST_PLY: usize = 2;
 pub const CORRHIST_SIZE: usize = 8192;
 pub const PAWNHIST_SIZE: usize = 4096;
 
