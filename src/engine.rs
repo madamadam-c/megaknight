@@ -976,13 +976,13 @@ impl Engine {
                 // lmr_depth -= 500 * pv as i32;
 
                 // reduce more when not improving
-                lmr_depth += 512 * !improving as i32;
+                lmr_depth += 1024 * !improving as i32;
 
                 // reduce based on history (max reduction is +/- 2 plies)
                 lmr_depth -= (1024 * mv.history / 8192).clamp(-2048, 2048);
                 
-                // don't go directly into qsearch or give negative reduction (ie. extension)
-                lmr_depth = lmr_depth.clamp(0, (depth-2)*1024) / 1024;
+                // don't give negative reduction (ie. extension)
+                lmr_depth = lmr_depth.max(0) / 1024;
             }
 
             let mut x = self.search_move(
