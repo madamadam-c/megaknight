@@ -10,7 +10,7 @@ use cozy_chess::{
 };
 
 use crate::{
-    TuneableParams, engine::NodeType::CUT, evaluate::{static_exchange_evaluation, value}, history::{CONTHIST_PLY, CaptureHistory, ContinuationHistory, CorrectionHistory, PawnHistory, QuietHistory, history_bonus}, nnue::NnueState, transposition::{
+    TuneableParams, evaluate::{static_exchange_evaluation, value}, history::{CONTHIST_PLY, CaptureHistory, ContinuationHistory, CorrectionHistory, PawnHistory, QuietHistory, history_bonus}, nnue::NnueState, transposition::{
         TTNodeType::{self, EXACT, LOWER, UPPER}, Table, TableEntry,
     },
 };
@@ -542,9 +542,9 @@ impl Engine {
             tt: Table::new_for_mb(16),
             nnue: NnueState::default(),
             params,
-            quiet_history: QuietHistory::new(params),
-            continuation_history: ContinuationHistory::new(params),
-            capture_history: CaptureHistory::new(params),
+            quiet_history: QuietHistory::new(),
+            continuation_history: ContinuationHistory::new(),
+            capture_history: CaptureHistory::new(),
             pawn_correction_history: CorrectionHistory::new(params),
             stm_non_pawn_correction_history: CorrectionHistory::new(params),
             nstm_non_pawn_correction_history: CorrectionHistory::new(params),
@@ -574,9 +574,9 @@ impl Engine {
     pub fn set_params(&mut self, params: TuneableParams) {
         self.params = params;
         self.tt.clear();
-        self.quiet_history = QuietHistory::new(params);
-        self.continuation_history = ContinuationHistory::new(params);
-        self.capture_history = CaptureHistory::new(params);
+        self.quiet_history = QuietHistory::new();
+        self.continuation_history = ContinuationHistory::new();
+        self.capture_history = CaptureHistory::new();
         self.pawn_correction_history = CorrectionHistory::new(params);
         self.stm_non_pawn_correction_history = CorrectionHistory::new(params);
         self.nstm_non_pawn_correction_history = CorrectionHistory::new(params);

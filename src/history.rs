@@ -4,9 +4,8 @@ use cozy_chess::{Piece, Square};
 
 use crate::TuneableParams;
 
-// pub const MAX_QUIET_HISTORY: i32 = 16_384;
-// pub const MAX_CORRECTION_HISTORY: i32 = 8192;
-
+pub const MAX_QUIET_HISTORY: i32 = 16_384;
+pub const MAX_CORRECTION_HISTORY: i32 = 8192;
 
 fn update_history(value: &mut i16, bonus: i32, scale: i32) {
     let bonus = bonus.clamp(-scale, scale);
@@ -30,14 +29,12 @@ type PawnHistEntry = [[[[i16; 64]; 6]; PAWNHIST_SIZE]; 2];
 
 pub struct QuietHistory {
     history: Box<QHEntry>,
-    params: TuneableParams,
 }
 
 impl QuietHistory {
-    pub fn new(params: TuneableParams) -> Self {
+    pub fn new() -> Self {
         Self {
             history: Box::new([[[0i16; 64]; 64]; 2]),
-            params
         }
     }
 
@@ -53,21 +50,19 @@ impl QuietHistory {
         update_history(
             &mut self.history[stm][from as usize][to as usize], 
             bonus,
-            self.params.history_max
+            MAX_QUIET_HISTORY
         );
     }
 }
 
 pub struct ContinuationHistory {
     history: [Box<ContHistEntry>; CONTHIST_PLY],
-    params: TuneableParams
 }
 
 impl ContinuationHistory {
-    pub fn new(params: TuneableParams) -> Self {
+    pub fn new() -> Self {
         Self {
             history: array::from_fn(|_| {Box::new([[[[[0i16; 6]; 64]; 6]; 64]; 2])}),
-            params
         }
     }
 
@@ -83,21 +78,19 @@ impl ContinuationHistory {
         update_history(
             &mut self.history[ply][stm][prev_to as usize][prev_piece as usize][to as usize][piece as usize], 
             bonus,
-            self.params.history_max
+            MAX_QUIET_HISTORY
         );
     }
 }
 
 pub struct CaptureHistory {
     history: Box<CaptureHistEntry>,
-    params: TuneableParams
 }
 
 impl CaptureHistory {
-    pub fn new(params: TuneableParams) -> Self {
+    pub fn new() -> Self {
         Self {
             history: Box::new([[[[0i16; 6]; 6]; 64]; 2]),
-            params
         }
     }
 
@@ -113,7 +106,7 @@ impl CaptureHistory {
         update_history(
             &mut self.history[stm][to as usize][piece as usize][target as usize], 
             bonus,
-            self.params.history_max
+            MAX_QUIET_HISTORY
         );
     }
 }
@@ -142,8 +135,8 @@ impl CorrectionHistory {
     pub fn update(&mut self, stm: usize, hash: u64, bonus: i32) {
         update_history(
             &mut self.history[stm][(hash as usize) & (CORRHIST_SIZE - 1)], 
-            bonus.clamp(-self.params.max_corrhist/self.params.corrhist_clamp_div, self.params.max_corrhist/self.params.corrhist_clamp_div),
-            self.params.max_corrhist
+            bonus.clamp(-MAX_CORRECTION_HISTORY/self.params.corrhist_clamp_div, MAX_CORRECTION_HISTORY/self.params.corrhist_clamp_div),
+            MAX_CORRECTION_HISTORY
         );
     }
 }
@@ -173,7 +166,7 @@ impl PawnHistory {
         update_history(
             &mut self.history[stm][(pawn_hash as usize) & (PAWNHIST_SIZE - 1)][piece_type as usize][to as usize],
             bonus,
-            self.params.history_max
+            MAX_QUIET_HISTORY
         );
     }
 }   
