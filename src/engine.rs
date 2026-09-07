@@ -542,15 +542,15 @@ impl Engine {
             tt: Table::new_for_mb(16),
             nnue: NnueState::default(),
             params,
-            quiet_history: QuietHistory::new(),
-            continuation_history: ContinuationHistory::new(),
-            capture_history: CaptureHistory::new(),
+            quiet_history: QuietHistory::new(params),
+            continuation_history: ContinuationHistory::new(params),
+            capture_history: CaptureHistory::new(params),
             pawn_correction_history: CorrectionHistory::new(params),
             stm_non_pawn_correction_history: CorrectionHistory::new(params),
             nstm_non_pawn_correction_history: CorrectionHistory::new(params),
             minor_correction_history: CorrectionHistory::new(params),
             major_correction_history: CorrectionHistory::new(params),
-            pawn_history: PawnHistory::new(),
+            pawn_history: PawnHistory::new(params),
             move_stack: Vec::with_capacity(256),
             eval_stack: vec![None; 256],
         }
@@ -574,15 +574,15 @@ impl Engine {
     pub fn set_params(&mut self, params: TuneableParams) {
         self.params = params;
         self.tt.clear();
-        self.quiet_history = QuietHistory::new();
-        self.continuation_history = ContinuationHistory::new();
-        self.capture_history = CaptureHistory::new();
+        self.quiet_history = QuietHistory::new(params);
+        self.continuation_history = ContinuationHistory::new(params);
+        self.capture_history = CaptureHistory::new(params);
         self.pawn_correction_history = CorrectionHistory::new(params);
         self.stm_non_pawn_correction_history = CorrectionHistory::new(params);
         self.nstm_non_pawn_correction_history = CorrectionHistory::new(params);
         self.minor_correction_history = CorrectionHistory::new(params);
         self.major_correction_history = CorrectionHistory::new(params);
-        self.pawn_history = PawnHistory::new();
+        self.pawn_history = PawnHistory::new(params);
     }
 
     pub fn get_correction_value(&self, board: &Board) -> i32 {
