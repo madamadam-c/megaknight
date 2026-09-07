@@ -732,7 +732,7 @@ impl Engine {
         }
         let mut picker = MovePicker::new(moves);
         while let Some(mv) = picker.next() {
-            if !in_check && mv.see_score < -100 {
+            if !in_check && mv.see_score < -24 { // -24.3687
                 continue;
             }
             let mut next_board = board.clone();
@@ -890,7 +890,7 @@ impl Engine {
         //     return Some(static_eval);
         // }
 
-        let rfp_margin = 123 * depth; // + correction.abs() / 2;
+        let rfp_margin = 93 * depth; // 93.6225
         if !in_check && !pv && depth <= 5 && static_eval - rfp_margin >= bounds.beta {
             return Some(static_eval);
         }
@@ -903,7 +903,12 @@ impl Engine {
            board.halfmove_clock() <= 95 && 
            (board.colors(board.side_to_move()) & !(board.pieces(Piece::Pawn) | board.pieces(Piece::King))).len() >= 1
         {
-            let r = 3 + depth / 4 + min(3, (static_eval - bounds.beta) / 200); // depth reduction apparently
+            let null_base = 4; // 3.6393
+            let null_div = 3; // 3.2139
+            let null_eval_div = 183; // 183.0971
+            let null_max_extra_reduction = 3; // 3.2152
+
+            let r = null_base + depth / null_div + min(null_max_extra_reduction, (static_eval - bounds.beta) / null_eval_div); // depth reduction apparently
             let mut new_board = board.null_move().unwrap();
             new_board.set_halfmove_clock(new_board.halfmove_clock() - 1);
 
@@ -943,8 +948,10 @@ impl Engine {
         let mut first_move = true;
 
         let mut moves_played = 0;
-        // let lmp_cap = (5 + 3*depth*depth) / (2 - improving as i32);
-        let lmp_cap = 5 + 3*depth*depth;
+
+        let lmp_base = 3; // 2.9243
+        let lmp_depth = 2; // 2.1464
+        let lmp_cap = lmp_base + lmp_depth*depth*depth;
 
         // let mut actual = NodeType::ALL;
         while let Some(mv) = picker.next() {
@@ -959,8 +966,11 @@ impl Engine {
             // lmr
             let mut lmr_depth = 0;
             if depth >= 2 && moves_played >= 2 && !mv.is_capture && !mv.promotion && !in_check {
+                let lmr_base = 1028.1; // 1028.1474
+                let lmr_log_scale = 1806.4; // 1806.3658
+
                 // base formula [credit: obsidian on cpw]
-                lmr_depth += (1024.0 * (0.99 + (depth as f32).ln() * (moves_played as f32).ln() / 3.14)) as i32;
+                lmr_depth += (lmr_base * 0.99 + lmr_log_scale * (depth as f32).ln() * (moves_played as f32).ln() / 3.14) as i32;
 
                 // reduce more on a cutnode
                 // lmr_depth += 512 * (expected == CUT) as i32;
@@ -972,10 +982,10 @@ impl Engine {
                 // lmr_depth -= 500 * pv as i32;
 
                 // reduce more when not improving
-                lmr_depth += 512 * !improving as i32;
+                lmr_depth += 557 * !improving as i32; // 556.4437
 
                 // reduce based on history (max reduction is +/- 2 plies)
-                lmr_depth -= 1024 * mv.history / 8192;
+                lmr_depth -= 1438 * mv.history / 8192; // 1438.2276
                 
                 lmr_depth = lmr_depth.max(0) / 1024;
             }
@@ -1196,8 +1206,8 @@ impl Engine {
                     .retain(|mv| request.limits.searchmoves.contains(&mv.mv));
             }
 
-            let mut alpha_delta = 20;
-            let mut beta_delta = 20;
+            let mut alpha_delta = 27; // 27.6333
+            let mut beta_delta = 27;
 
             loop {
                 // aspiration windows
