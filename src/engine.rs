@@ -550,7 +550,7 @@ impl Engine {
             nstm_non_pawn_correction_history: CorrectionHistory::new(params),
             minor_correction_history: CorrectionHistory::new(params),
             major_correction_history: CorrectionHistory::new(params),
-            pawn_history: PawnHistory::new(params),
+            pawn_history: PawnHistory::new(),
             move_stack: Vec::with_capacity(256),
             eval_stack: vec![None; 256],
         }
@@ -582,7 +582,7 @@ impl Engine {
         self.nstm_non_pawn_correction_history = CorrectionHistory::new(params);
         self.minor_correction_history = CorrectionHistory::new(params);
         self.major_correction_history = CorrectionHistory::new(params);
-        self.pawn_history = PawnHistory::new(params);
+        self.pawn_history = PawnHistory::new();
     }
 
     pub fn get_correction_value(&self, board: &Board) -> i32 {
@@ -1109,7 +1109,7 @@ impl Engine {
             !(node_type == TTNodeType::LOWER && result <= static_eval) && !(node_type == TTNodeType::UPPER && result >= static_eval)
             && result.abs() <= 95_000
         {
-            let bonus = (result - static_eval) * depth / self.params.corrhist_bonus_div;
+            let bonus = self.params.corrhist_bonus_mult * (result - static_eval) * depth / 1024;
             let pawn_hash = board.pawn_hash(board.side_to_move()) ^ board.pawn_hash(!board.side_to_move());
             // let minor_hash = board.minor_piece_hash(board.side_to_move()) ^ board.minor_piece_hash(!board.side_to_move());
             // let major_hash = board.major_piece_hash(board.side_to_move()) ^ board.major_piece_hash(!board.side_to_move());

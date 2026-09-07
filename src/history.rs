@@ -133,9 +133,10 @@ impl CorrectionHistory {
     }
 
     pub fn update(&mut self, stm: usize, hash: u64, bonus: i32) {
+        let clamp = self.params.corrhist_clamp_mult * MAX_CORRECTION_HISTORY / 1024;
         update_history(
             &mut self.history[stm][(hash as usize) & (CORRHIST_SIZE - 1)], 
-            bonus.clamp(-MAX_CORRECTION_HISTORY/self.params.corrhist_clamp_div, MAX_CORRECTION_HISTORY/self.params.corrhist_clamp_div),
+            bonus.clamp(-clamp, clamp),
             MAX_CORRECTION_HISTORY
         );
     }
@@ -143,14 +144,12 @@ impl CorrectionHistory {
 
 pub struct PawnHistory {
     history: Box<PawnHistEntry>,
-    params: TuneableParams
 }
 
 impl PawnHistory {
-    pub fn new(params: TuneableParams) -> Self {
+    pub fn new() -> Self {
         Self {
             history: Box::new([[[[0i16; 64]; 6]; PAWNHIST_SIZE]; 2]),
-            params
         }
     }
 
