@@ -26,9 +26,117 @@ mod transposition;
 #[cfg(test)]
 mod tests;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct TuneableParams {
+    pub pawn_corrhist_weight: i32,
+    pub nonpawn_corrhist_weight: i32,
+    pub max_corrhist: i32,
+    pub corrhist_clamp_div: i32,
+    pub corrhist_bonus_div: i32,
+    pub quiet_history_weight: i32,
+    pub pawn_history_weight: i32,
+    pub cont_history_weight: i32,
+    pub history_max: i32,
+    pub history_malus_weight: i32,
+    pub rfp_margin: i32,
+    pub rfp_max_depth: i32,
+    pub nmp_base: i32,
+    pub nmp_div: i32,
+    pub nmp_eval_div: i32,
+    pub nmp_max_eval_reduction: i32,
+    pub nmp_min_depth: i32,
+    pub lmp_base: i32,
+    pub lmp_mul: i32,
+    pub lmr_base: i32,
+    pub lmr_log_scale: i32,
+    pub lmr_improving: i32,
+    pub lmr_history: i32,
+    pub lmr_min_depth: i32,
+    pub lmr_min_moves: i32,
+    pub aspiration_initial: i32,
+    pub aspiration_fw_depth: i32,
+    pub good_capture_threshold: i32,
+    pub qsearch_see_threshold: i32,
+}
+
+impl Default for TuneableParams {
+    fn default() -> Self {
+        Self {
+            pawn_corrhist_weight: 256,
+            nonpawn_corrhist_weight: 256,
+            max_corrhist: 8192,
+            corrhist_clamp_div: 4,
+            corrhist_bonus_div: 4,
+            quiet_history_weight: 1024,
+            pawn_history_weight: 1024,
+            cont_history_weight: 1024,
+            history_max: 16384,
+            history_malus_weight: 1024,
+            rfp_margin: 94,
+            rfp_max_depth: 5,
+            nmp_base: 4,
+            nmp_div: 3,
+            nmp_eval_div: 183,
+            nmp_max_eval_reduction: 3,
+            nmp_min_depth: 3,
+            lmp_base: 3,
+            lmp_mul: 2,
+            lmr_base: 1018,
+            lmr_log_scale: 1806,
+            lmr_improving: 557,
+            lmr_history: 5833,
+            lmr_min_depth: 2,
+            lmr_min_moves: 2,
+            aspiration_initial: 27,
+            aspiration_fw_depth: 4,
+            good_capture_threshold: 0,
+            qsearch_see_threshold: -24,
+        }
+    }
+}
+
+struct TuneableOption {
+    name: &'static str,
+    default: i32,
+    min: i32,
+    max: i32,
+}
+
+const TUNEABLE_OPTIONS: &[TuneableOption] = &[
+    TuneableOption { name: "PawnCorrhistWeight", default: 256, min: 0, max: 4096 },
+    TuneableOption { name: "NonpawnCorrhistWeight", default: 256, min: 0, max: 4096 },
+    TuneableOption { name: "MaxCorrhist", default: 8192, min: 1024, max: 32767 },
+    TuneableOption { name: "CorrhistClampDiv", default: 4, min: 1, max: 16 },
+    TuneableOption { name: "CorrhistBonusDiv", default: 4, min: 1, max: 16 },
+    TuneableOption { name: "QuietHistoryWeight", default: 1024, min: 0, max: 4096 },
+    TuneableOption { name: "PawnHistoryWeight", default: 1024, min: 0, max: 4096 },
+    TuneableOption { name: "ContHistoryWeight", default: 1024, min: 0, max: 4096 },
+    TuneableOption { name: "HistoryMax", default: 16384, min: 1024, max: 32767 },
+    TuneableOption { name: "HistoryMalusWeight", default: 1024, min: 0, max: 4096 },
+    TuneableOption { name: "RfpMargin", default: 94, min: 0, max: 500 },
+    TuneableOption { name: "RfpMaxDepth", default: 5, min: 1, max: 8 },
+    TuneableOption { name: "NmpBase", default: 4, min: 1, max: 8 },
+    TuneableOption { name: "NmpDiv", default: 3, min: 1, max: 16 },
+    TuneableOption { name: "NmpEvalDiv", default: 183, min: 50, max: 1000 },
+    TuneableOption { name: "NmpMaxEvalReduction", default: 3, min: 0, max: 8 },
+    TuneableOption { name: "NmpMinDepth", default: 3, min: 2, max: 8 },
+    TuneableOption { name: "LmpBase", default: 3, min: 1, max: 30 },
+    TuneableOption { name: "LmpMul", default: 2, min: 0, max: 10 },
+    TuneableOption { name: "LmrBase", default: 1018, min: 256, max: 2048 },
+    TuneableOption { name: "LmrImproving", default: 557, min: 0, max: 2048 },
+    TuneableOption { name: "LmrHistory", default: 5833, min: 1024, max: 16384 },
+    TuneableOption { name: "LmrMinDepth", default: 2, min: 1, max: 5 },
+    TuneableOption { name: "LmrMinMoves", default: 2, min: 1, max: 8 },
+    TuneableOption { name: "AspirationInitial", default: 27, min: 1, max: 200 },
+    TuneableOption { name: "AspirationFwDepth", default: 4, min: 1, max: 8 },
+    TuneableOption { name: "GoodCaptureThreshold", default: 0, min: -100, max: 100 },
+    TuneableOption { name: "QsearchSeeThreshold", default: -24, min: -1000, max: 0 },
+];
+
 enum Command {
     Go { id: u64, request: SearchRequest },
     SetHash(u64),
+    SetTuneableParams(TuneableParams),
     NewGame,
     Quit,
 }
@@ -161,6 +269,80 @@ fn parse_hash_option(line: &str) -> Option<u64> {
         .map(|megabytes| megabytes.clamp(1, 65_536))
 }
 
+fn parse_named_spin_option(line: &str) -> Option<(String, i32)> {
+    let parts: Vec<&str> = line.split_whitespace().collect();
+    let name_start = parts
+        .iter()
+        .position(|part| part.eq_ignore_ascii_case("name"))?
+        + 1;
+    let value_start = parts
+        .iter()
+        .position(|part| part.eq_ignore_ascii_case("value"))?;
+    let name = parts.get(name_start..value_start)?.join(" ");
+    let value = parts.get(value_start + 1)?.parse().ok()?;
+    Some((name, value))
+}
+
+fn parse_tuneable_option(line: &str, params: &mut TuneableParams) -> bool {
+    let Some((name, raw_value)) = parse_named_spin_option(line) else {
+        return false;
+    };
+
+    let name = name.to_ascii_lowercase();
+    let Some(option) = TUNEABLE_OPTIONS
+        .iter()
+        .find(|option| option.name.eq_ignore_ascii_case(&name))
+    else {
+        return false;
+    };
+    let value = raw_value.clamp(option.min, option.max);
+
+    match name.as_str() {
+        "pawncorrhistweight" => params.pawn_corrhist_weight = value,
+        "nonpawncorrhistweight" => params.nonpawn_corrhist_weight = value,
+        "maxcorrhist" => params.max_corrhist = value,
+        "corrhistclampdiv" => params.corrhist_clamp_div = value,
+        "corrhistbonusdiv" => params.corrhist_bonus_div = value,
+        "quiethistoryweight" => params.quiet_history_weight = value,
+        "pawnhistoryweight" => params.pawn_history_weight = value,
+        "conthistoryweight" => params.cont_history_weight = value,
+        "historymax" => params.history_max = value,
+        "historymalusweight" => params.history_malus_weight = value,
+        "rfpmargin" => params.rfp_margin = value,
+        "rfpmaxdepth" => params.rfp_max_depth = value,
+        "nmpbase" => params.nmp_base = value,
+        "nmpdiv" => params.nmp_div = value,
+        "nmpevaldiv" => params.nmp_eval_div = value,
+        "nmpmaxevalreduction" => params.nmp_max_eval_reduction = value,
+        "nmpmindepth" => params.nmp_min_depth = value,
+        "lmpbase" => params.lmp_base = value,
+        "lmpmul" => params.lmp_mul = value,
+        "lmrbase" => params.lmr_base = value,
+        "lmrimproving" => params.lmr_improving = value,
+        "lmrhistory" => params.lmr_history = value,
+        "lmrmindepth" => params.lmr_min_depth = value,
+        "lmrminmoves" => params.lmr_min_moves = value,
+        "aspirationinitial" => params.aspiration_initial = value,
+        "aspirationfwdepth" => params.aspiration_fw_depth = value,
+        "goodcapturethreshold" => params.good_capture_threshold = value,
+        "qsearchseethreshold" => params.qsearch_see_threshold = value,
+        _ => return false,
+    }
+
+    true
+}
+
+fn announce_options() {
+    print_output("option name Threads type spin default 1 min 1 max 1");
+    print_output("option name Hash type spin default 16 min 1 max 65536");
+    for option in TUNEABLE_OPTIONS {
+        print_output(&format!(
+            "option name {} type spin default {} min {} max {}",
+            option.name, option.default, option.min, option.max
+        ));
+    }
+}
+
 fn print_output(output: &str) {
     println!("{output}");
     io::stdout().flush().unwrap();
@@ -285,7 +467,7 @@ fn run_bench() {
         ("8/5pk1/6p1/3pP3/3P1P2/6P1/5K2/8 w - - 0 40", 15),
     ];
 
-    let mut engine = Engine::new();
+    let mut engine = Engine::new(TuneableParams::default());
     let started = std::time::Instant::now();
     let mut total_nodes = 0u64;
 
@@ -317,9 +499,10 @@ fn run_uci() {
     let (event_tx, event_rx) = mpsc::channel::<MainEvent>();
     let _input_handle = spawn_input_reader(event_tx.clone());
     let (command_tx, command_rx) = mpsc::channel::<Command>();
+    let mut tuneable_params = TuneableParams::default();
 
     let worker_handle = thread::spawn(move || {
-        let mut engine = Engine::new();
+        let mut engine = Engine::new(tuneable_params);
 
         while let Ok(command) = command_rx.recv() {
             match command {
@@ -340,6 +523,7 @@ fn run_uci() {
                     }));
                 }
                 Command::SetHash(megabytes) => engine.set_hash_size_mb(megabytes),
+                Command::SetTuneableParams(params) => engine.set_params(params),
                 Command::NewGame => engine.new_game(),
                 Command::Quit => break,
             }
@@ -380,8 +564,7 @@ fn run_uci() {
             Some("uci") => {
                 print_output("id name chessbot");
                 print_output("id author me");
-                print_output("option name Threads type spin default 1 min 1 max 1");
-                print_output("option name Hash type spin default 16 min 1 max 65536");
+                announce_options();
                 print_output("uciok");
             }
             Some("isready") => print_output("readyok"),
@@ -429,6 +612,10 @@ fn run_uci() {
                         stop.store(true, Ordering::Relaxed);
                     }
                     let _ = command_tx.send(Command::SetHash(megabytes));
+                } else {
+                    if parse_tuneable_option(&line, &mut tuneable_params) {
+                        let _ = command_tx.send(Command::SetTuneableParams(tuneable_params));
+                    }
                 }
             }
             _ => {}
