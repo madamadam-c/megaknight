@@ -161,6 +161,25 @@ fn parse_hash_option(line: &str) -> Option<u64> {
         .map(|megabytes| megabytes.clamp(1, 65_536))
 }
 
+fn parse_named_spin_option(line: &str) -> Option<(String, i32)> {
+    let parts: Vec<&str> = line.split_whitespace().collect();
+    let name_start = parts
+        .iter()
+        .position(|part| part.eq_ignore_ascii_case("name"))?
+        + 1;
+    let value_start = parts
+        .iter()
+        .position(|part| part.eq_ignore_ascii_case("value"))?;
+    let name = parts.get(name_start..value_start)?.join(" ");
+    let value = parts.get(value_start + 1)?.parse().ok()?;
+    Some((name, value))
+}
+
+fn announce_options() {
+    print_output("option name Threads type spin default 1 min 1 max 1");
+    print_output("option name Hash type spin default 16 min 1 max 65536");
+}
+
 fn print_output(output: &str) {
     println!("{output}");
     io::stdout().flush().unwrap();
@@ -380,8 +399,7 @@ fn run_uci() {
             Some("uci") => {
                 print_output("id name chessbot");
                 print_output("id author me");
-                print_output("option name Threads type spin default 1 min 1 max 1");
-                print_output("option name Hash type spin default 16 min 1 max 65536");
+                announce_options();
                 print_output("uciok");
             }
             Some("isready") => print_output("readyok"),
