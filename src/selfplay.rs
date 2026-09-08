@@ -378,7 +378,7 @@ fn worker_loop(
     next_game: &AtomicU64,
     counters: &Counters,
 ) {
-    let mut engine = Engine::new(crate::TuneableParams::default());
+    let mut engine = Engine::new();
     engine.set_hash_size_mb(config.hash_mb);
 
     while !cancelled.load(Ordering::Relaxed) {

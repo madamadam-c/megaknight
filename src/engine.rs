@@ -10,7 +10,7 @@ use cozy_chess::{
 };
 
 use crate::{
-    TuneableParams, evaluate::{static_exchange_evaluation, value}, history::{CONTHIST_PLY, CaptureHistory, ContinuationHistory, CorrectionHistory, PawnHistory, QuietHistory, history_bonus}, nnue::NnueState, transposition::{
+    evaluate::{static_exchange_evaluation, value}, history::{CONTHIST_PLY, CaptureHistory, ContinuationHistory, CorrectionHistory, PawnHistory, QuietHistory, history_bonus}, nnue::NnueState, transposition::{
         TTNodeType::{self, EXACT, LOWER, UPPER}, Table, TableEntry,
     },
 };
@@ -522,7 +522,6 @@ const DUMMY_NULL: [StackMove; 2] = [
 pub struct Engine {
     tt: Table,
     nnue: NnueState,
-    params: TuneableParams,
     quiet_history: QuietHistory,
     continuation_history: ContinuationHistory,
     capture_history: CaptureHistory,
@@ -537,20 +536,19 @@ pub struct Engine {
 }
 
 impl Engine {
-    pub fn new(params: TuneableParams) -> Self {
+    pub fn new() -> Self {
         Self {
             tt: Table::new_for_mb(16),
             nnue: NnueState::default(),
-            params,
-            quiet_history: QuietHistory::new(params),
-            continuation_history: ContinuationHistory::new(params),
-            capture_history: CaptureHistory::new(params),
-            pawn_correction_history: CorrectionHistory::new(params),
-            stm_non_pawn_correction_history: CorrectionHistory::new(params),
-            nstm_non_pawn_correction_history: CorrectionHistory::new(params),
-            minor_correction_history: CorrectionHistory::new(params),
-            major_correction_history: CorrectionHistory::new(params),
-            pawn_history: PawnHistory::new(params),
+            quiet_history: QuietHistory::new(),
+            continuation_history: ContinuationHistory::new(),
+            capture_history: CaptureHistory::new(),
+            pawn_correction_history: CorrectionHistory::new(),
+            stm_non_pawn_correction_history: CorrectionHistory::new(),
+            nstm_non_pawn_correction_history: CorrectionHistory::new(),
+            minor_correction_history: CorrectionHistory::new(),
+            major_correction_history: CorrectionHistory::new(),
+            pawn_history: PawnHistory::new(),
             move_stack: Vec::with_capacity(256),
             eval_stack: vec![None; 256],
         }
@@ -571,20 +569,6 @@ impl Engine {
         self.tt = Table::new_for_mb(megabytes);
     }
 
-    pub fn set_params(&mut self, params: TuneableParams) {
-        self.params = params;
-        self.tt.clear();
-        self.quiet_history = QuietHistory::new(params);
-        self.continuation_history = ContinuationHistory::new(params);
-        self.capture_history = CaptureHistory::new(params);
-        self.pawn_correction_history = CorrectionHistory::new(params);
-        self.stm_non_pawn_correction_history = CorrectionHistory::new(params);
-        self.nstm_non_pawn_correction_history = CorrectionHistory::new(params);
-        self.minor_correction_history = CorrectionHistory::new(params);
-        self.major_correction_history = CorrectionHistory::new(params);
-        self.pawn_history = PawnHistory::new(params);
-    }
-
     pub fn get_correction_value(&self, board: &Board) -> i32 {
         let pawn_hash = board.pawn_hash(board.side_to_move()) ^ board.pawn_hash(!board.side_to_move());
         // let minor_hash = board.minor_piece_hash(board.side_to_move()) ^ board.minor_piece_hash(!board.side_to_move());
@@ -594,11 +578,11 @@ impl Engine {
 
         let correction = (
             0 // just for formatting reasons
-            + self.params.pawn_corrhist_weight * self.pawn_correction_history.get(board.side_to_move() as usize, pawn_hash)
+            + 290 * self.pawn_correction_history.get(board.side_to_move() as usize, pawn_hash)
         //     + 0*self.minor_correction_history.get(board.side_to_move() as usize, minor_hash)
         //     + 0*self.major_correction_history.get(board.side_to_move() as usize, major_hash)
-            + self.params.nonpawn_corrhist_weight * self.stm_non_pawn_correction_history.get(board.side_to_move() as usize, stm_non_pawn_hash)
-            + self.params.nonpawn_corrhist_weight * self.nstm_non_pawn_correction_history.get(board.side_to_move() as usize, nstm_non_pawn_hash)
+            + 398 * self.stm_non_pawn_correction_history.get(board.side_to_move() as usize, stm_non_pawn_hash)
+            + 398 * self.nstm_non_pawn_correction_history.get(board.side_to_move() as usize, nstm_non_pawn_hash)
         ) / 16384;
         return correction;
     }
@@ -627,14 +611,14 @@ impl Engine {
                     }
                     
                     emv.history = (
-                        self.params.quiet_history_weight * quiet_history + 
-                        self.params.pawn_history_weight * pawn_history + 
-                        self.params.cont_history_weight * continuation_history
+                        1035 * quiet_history + 
+                        915 * pawn_history + 
+                        1114 * continuation_history
                     ) / 1024;
                 }
 
                 if emv.is_capture || emv.is_tt {
-                    if emv.see_score >= self.params.good_capture_threshold as i16 || emv.is_tt {
+                    if emv.see_score >= 0 || emv.is_tt {
                         moves.good_captures.push(emv);
                     } else {
                         moves.bad_captures.push(emv);
@@ -672,7 +656,7 @@ impl Engine {
                 if emv.is_capture {
                     // emv.history = self.capture_history.get(board.side_to_move() as usize, mv.to, emv.piece_type, emv.target_type.unwrap());
                     emv.see_score = static_exchange_evaluation(board, &emv);
-                    if emv.see_score >= self.params.good_capture_threshold as i16 {
+                    if emv.see_score >= 0 {
                         moves.good_captures.push(emv);
                     } else {
                         moves.bad_captures.push(emv);
@@ -752,7 +736,7 @@ impl Engine {
         }
         let mut picker = MovePicker::new(moves);
         while let Some(mv) = picker.next() {
-            if !in_check && mv.see_score < self.params.qsearch_see_threshold as i16 {
+            if !in_check && mv.see_score < -24 {
                 continue;
             }
             let mut next_board = board.clone();
@@ -910,8 +894,8 @@ impl Engine {
         //     return Some(static_eval);
         // }
 
-        let rfp_margin = self.params.rfp_margin * depth; 
-        if !in_check && !pv && depth <= self.params.rfp_max_depth && static_eval - rfp_margin >= bounds.beta {
+        let rfp_margin = 94 * depth; 
+        if !in_check && !pv && depth <= 5 && static_eval - rfp_margin >= bounds.beta {
             return Some(static_eval);
         }
 
@@ -919,14 +903,14 @@ impl Engine {
            !pv && 
            !null_position && 
            static_eval >= bounds.beta && 
-           depth >= self.params.nmp_min_depth && 
+           depth >= 3 && 
            board.halfmove_clock() <= 95 && 
            (board.colors(board.side_to_move()) & !(board.pieces(Piece::Pawn) | board.pieces(Piece::King))).len() >= 1
         {
-            let null_base = self.params.nmp_base; 
-            let null_div = self.params.nmp_div; 
-            let null_eval_div = self.params.nmp_eval_div;
-            let null_max_extra_reduction = self.params.nmp_max_eval_reduction;
+            let null_base = 4; 
+            let null_div = 3; 
+            let null_eval_div = 183;
+            let null_max_extra_reduction = 3;
 
             let r = null_base + depth / null_div + min(null_max_extra_reduction, (static_eval - bounds.beta) / null_eval_div); // depth reduction apparently
             let mut new_board = board.null_move().unwrap();
@@ -969,8 +953,8 @@ impl Engine {
 
         let mut moves_played = 0;
 
-        let lmp_base = self.params.lmp_base; 
-        let lmp_depth = self.params.lmp_mul;
+        let lmp_base = 3; 
+        let lmp_depth = 2;
         let lmp_cap = lmp_base + lmp_depth*depth*depth;
 
         // let mut actual = NodeType::ALL;
@@ -985,13 +969,13 @@ impl Engine {
 
             // lmr
             let mut lmr_depth = 0;
-            if depth >= self.params.lmr_min_depth && 
-               moves_played >= self.params.lmr_min_moves && 
+            if depth >= 2 && 
+               moves_played >= 2 && 
                !mv.is_capture && 
                !mv.promotion && !in_check 
             {
-                let lmr_base = self.params.lmr_base; 
-                let lmr_log_scale = self.params.lmr_log_scale; 
+                let lmr_base = 1018; 
+                let lmr_log_scale = 1806; 
 
                 // base formula [credit: obsidian on cpw]
                 lmr_depth += ((lmr_base as f32) + (lmr_log_scale as f32) * (depth as f32).ln() * (moves_played as f32).ln() / 3.14) as i32;
@@ -1006,10 +990,10 @@ impl Engine {
                 // lmr_depth -= 500 * pv as i32;
 
                 // reduce more when not improving
-                lmr_depth += self.params.lmr_improving * !improving as i32; 
+                lmr_depth += 557 * !improving as i32; 
 
                 // reduce based on history (max reduction is +/- 2 plies)
-                lmr_depth -= 1024 * mv.history / self.params.lmr_history;
+                lmr_depth -= 1024 * mv.history / 5749;
                 
                 lmr_depth = lmr_depth.max(0) / 1024;
             }
@@ -1054,7 +1038,7 @@ impl Engine {
                 if !mv.is_capture && !mv.promotion {
                     let pawn_hash = board.pawn_hash(board.side_to_move()) ^ board.pawn_hash(!board.side_to_move());
                     let bonus = history_bonus(depth);
-                    let malus = self.params.history_malus_weight * (-history_bonus(depth)) / 1024;
+                    let malus = 1306 * (-history_bonus(depth)) / 1024;
 
                     self.quiet_history.update(stm_index, mv.mv.from, mv.mv.to, bonus);
                     self.pawn_history.update(stm_index, pawn_hash, mv.mv.to, mv.piece_type, bonus);
@@ -1109,7 +1093,7 @@ impl Engine {
             !(node_type == TTNodeType::LOWER && result <= static_eval) && !(node_type == TTNodeType::UPPER && result >= static_eval)
             && result.abs() <= 95_000
         {
-            let bonus = self.params.corrhist_bonus_mult * (result - static_eval) * depth / 1024;
+            let bonus = 339 * (result - static_eval) * depth / 1024;
             let pawn_hash = board.pawn_hash(board.side_to_move()) ^ board.pawn_hash(!board.side_to_move());
             // let minor_hash = board.minor_piece_hash(board.side_to_move()) ^ board.minor_piece_hash(!board.side_to_move());
             // let major_hash = board.major_piece_hash(board.side_to_move()) ^ board.major_piece_hash(!board.side_to_move());
@@ -1232,14 +1216,14 @@ impl Engine {
                     .retain(|mv| request.limits.searchmoves.contains(&mv.mv));
             }
 
-            let mut alpha_delta = self.params.aspiration_initial;
-            let mut beta_delta = self.params.aspiration_initial;
+            let mut alpha_delta = 27;
+            let mut beta_delta = 27;
 
             loop {
                 // aspiration windows
                 let bounds = SearchBounds {
-                    alpha: if depth <= self.params.aspiration_fw_depth {-1_000_000_000} else {previous_score - alpha_delta},
-                    beta: if depth <= self.params.aspiration_fw_depth {1_000_000_000} else {previous_score + beta_delta},
+                    alpha: if depth <= 4 {-1_000_000_000} else {previous_score - alpha_delta},
+                    beta: if depth <= 4 {1_000_000_000} else {previous_score + beta_delta},
                 };
 
                 let Some((best_move, score)) =
