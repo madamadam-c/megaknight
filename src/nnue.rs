@@ -19,7 +19,7 @@ const NETWORK_PAYLOAD_SIZE: usize =
 const NETWORK_FILE_SIZE: usize = 98_752;
 
 const NETWORK_BYTES: &[u8; NETWORK_FILE_SIZE] = include_bytes!(
-    "../networks/31_08_26.bin"
+    "../networks/09_09_26.bin"
 );
 const NETWORK: Network = Network::from_bytes(NETWORK_BYTES);
 

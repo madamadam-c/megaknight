@@ -70,6 +70,28 @@ fn formats_the_bullet_text_record() {
 }
 
 #[test]
+fn parses_bullet_text_while_preserving_wdl() {
+    let item = parse_bullet_record(
+        "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1 | -321 | 0.5\n",
+    )
+    .unwrap();
+
+    assert_eq!(
+        item.fen,
+        "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+    );
+    assert_eq!(item.board, Board::default());
+    assert_eq!(item.result, "0.5");
+}
+
+#[test]
+fn rejects_malformed_bullet_text() {
+    assert!(parse_bullet_record("not a fen | 12 | 1.0").is_err());
+    assert!(parse_bullet_record("8/8/8/8/8/8/4K3/7k w - - 0 1 | nope | 0.5").is_err());
+    assert!(parse_bullet_record("8/8/8/8/8/8/4K3/7k w - - 0 1 | 12 | 1/2-1/2").is_err());
+}
+
+#[test]
 fn reads_streaming_binpack_chunks() {
     let mut data = b"BINP".to_vec();
     data.extend_from_slice(&3u32.to_le_bytes());

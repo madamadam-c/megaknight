@@ -3,7 +3,7 @@ use std::{
     error::Error,
     ffi::OsString,
     fs::{self, File, OpenOptions},
-    io::{BufWriter, Read, Write},
+    io::{BufRead, BufReader, BufWriter, Read, Write},
     path::{Path, PathBuf},
     sync::{
         Arc,
@@ -35,7 +35,7 @@ const USAGE: &str = "\
 Usage: chessbot bulk-eval --positions N [options]
 
 Options:
-  --input PATH         Input zstd/gzip/tar archive (default: datagen/positions.tar.zst)
+  --input PATH         Input Bullet text or zstd/gzip/tar archive (default: datagen/positions.tar.zst)
   --output PATH        Bullet text output (default: datagen/positions.txt)
   --positions N        Number of output positions to evaluate (required)
   --nodes N            Search nodes per position (default: 10000)
@@ -296,6 +296,115 @@ fn spawn_reader(
 }
 
 fn read_positions(
+    input: &Path,
+    target: u64,
+    include_tactical: bool,
+    work_tx: &Sender<WorkItem>,
+    cancelled: &AtomicBool,
+    counters: &Counters,
+) -> Result<u64, AnyError> {
+    let name = input
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("");
+    if name.ends_with(".txt") {
+        return read_bullet_positions(
+            BufReader::new(File::open(input)?),
+            target,
+            work_tx,
+            cancelled,
+            counters,
+        );
+    }
+    if name.ends_with(".txt.zst") {
+        let decoder = zstd::stream::read::Decoder::new(File::open(input)?)?;
+        return read_bullet_positions(
+            BufReader::new(decoder),
+            target,
+            work_tx,
+            cancelled,
+            counters,
+        );
+    }
+
+    read_binpack_positions(
+        input,
+        target,
+        include_tactical,
+        work_tx,
+        cancelled,
+        counters,
+    )
+}
+
+fn read_bullet_positions(
+    mut reader: impl BufRead,
+    target: u64,
+    work_tx: &Sender<WorkItem>,
+    cancelled: &AtomicBool,
+    counters: &Counters,
+) -> Result<u64, AnyError> {
+    let mut queued = 0u64;
+    let mut line_number = 0u64;
+    let mut line = String::new();
+
+    while queued < target && !cancelled.load(Ordering::Relaxed) {
+        line.clear();
+        if reader.read_line(&mut line)? == 0 {
+            break;
+        }
+        line_number += 1;
+        counters.scanned.fetch_add(1, Ordering::Relaxed);
+
+        let item = parse_bullet_record(&line).map_err(|error| {
+            counters.invalid.fetch_add(1, Ordering::Relaxed);
+            format!("invalid Bullet record at line {line_number}: {error}")
+        })?;
+        if work_tx.send(item).is_err() {
+            break;
+        }
+        queued += 1;
+        counters.queued.store(queued, Ordering::Relaxed);
+    }
+
+    if queued != target && !cancelled.load(Ordering::Relaxed) {
+        return Err(
+            format!("Bullet input contained only {queued} positions; requested {target}").into(),
+        );
+    }
+    Ok(queued)
+}
+
+fn parse_bullet_record(line: &str) -> Result<WorkItem, String> {
+    let mut fields = line.trim().split('|').map(str::trim);
+    let fen = fields
+        .next()
+        .filter(|field| !field.is_empty())
+        .ok_or("missing FEN")?;
+    let score = fields.next().ok_or("missing score")?;
+    let result = fields.next().ok_or("missing WDL")?;
+    if fields.next().is_some() {
+        return Err("too many fields".to_string());
+    }
+    score
+        .parse::<i32>()
+        .map_err(|_| format!("invalid score: {score}"))?;
+    let result = match result {
+        "1.0" => "1.0",
+        "0.5" => "0.5",
+        "0.0" => "0.0",
+        _ => return Err(format!("invalid WDL: {result}")),
+    };
+    let board = Board::from_fen(fen, false).map_err(|_| format!("invalid FEN: {fen}"))?;
+
+    Ok(WorkItem {
+        fen: fen.to_string(),
+        board,
+        result,
+    })
+}
+
+fn read_binpack_positions(
     input: &Path,
     target: u64,
     include_tactical: bool,
