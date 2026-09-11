@@ -1,9 +1,8 @@
-use std::mem::size_of;
-
 use cozy_chess::Move;
 
 const CLUSTER_SIZE: usize = 2;
 const EXACT_BONUS: i64 = 2;
+const LEGACY_BUCKET_SIZE: usize = 64;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum TTNodeType {
@@ -27,15 +26,27 @@ pub struct Table {
     buckets: Vec<TableBucket>,
 }
 
-#[derive(Clone, Copy, Default)]
-struct TableSlot {
+#[derive(Clone, Copy)]
+struct TableBucket {
     epoch: u32,
-    entry: Option<TableEntry>,
+    len: u8,
+    slots: [TableEntry; CLUSTER_SIZE],
 }
 
-#[derive(Clone, Copy, Default)]
-struct TableBucket {
-    slots: [TableSlot; CLUSTER_SIZE],
+impl Default for TableBucket {
+    fn default() -> Self {
+        Self {
+            epoch: 0,
+            len: 0,
+            slots: [TableEntry {
+                key: 0,
+                score: 0,
+                depth: 0,
+                node_type: TTNodeType::UPPER,
+                best_move: None,
+            }; CLUSTER_SIZE],
+        }
+    }
 }
 
 impl Table {
@@ -51,7 +62,8 @@ impl Table {
 
     pub fn new_for_mb(megabytes: u64) -> Self {
         let bytes = u128::from(megabytes.max(1)) * 1024 * 1024;
-        let bucket_size = size_of::<TableBucket>() as u128;
+        // Keep the original capacity and indexing despite the denser bucket layout.
+        let bucket_size = LEGACY_BUCKET_SIZE as u128;
         let max_buckets = (bytes / bucket_size).min(usize::MAX as u128) as usize;
         let size = largest_power_of_two(max_buckets.max(1));
 
@@ -66,57 +78,61 @@ impl Table {
         }
     }
 
+    #[inline(always)]
     pub fn get(&self, key: u64) -> Option<TableEntry> {
-        self.buckets[(key as usize) & self.mask]
-            .slots
-            .iter()
-            .filter(|slot| slot.epoch == self.epoch)
-            .find_map(|slot| slot.entry.filter(|entry| entry.key == key))
+        let bucket = &self.buckets[(key as usize) & self.mask];
+        if bucket.epoch != self.epoch {
+            return None;
+        }
+
+        let mut index = 0;
+        while index < bucket.len as usize {
+            let entry = bucket.slots[index];
+            if entry.key == key {
+                return Some(entry);
+            }
+            index += 1;
+        }
+        None
     }
 
+    #[inline(always)]
     pub fn insert(&mut self, key: u64, entry: TableEntry) {
         let epoch = self.epoch;
         let bucket = &mut self.buckets[(key as usize) & self.mask];
 
-        if let Some(slot) = bucket.slots.iter_mut().find(|slot| {
-            slot.epoch == epoch && slot.entry.is_some_and(|current| current.key == key)
-        }) {
-            let current = slot.entry.unwrap();
-            if entry.depth >= current.depth - 2
-                || (entry.node_type == TTNodeType::EXACT && current.node_type != TTNodeType::EXACT)
-            {
-                *slot = TableSlot {
-                    epoch,
-                    entry: Some(entry),
-                };
+        if bucket.epoch != epoch {
+            bucket.epoch = epoch;
+            bucket.len = 0;
+        }
+
+        let mut index = 0;
+        while index < bucket.len as usize {
+            let current = bucket.slots[index];
+            if current.key == key {
+                if entry.depth >= current.depth - 2
+                    || (entry.node_type == TTNodeType::EXACT
+                        && current.node_type != TTNodeType::EXACT)
+                {
+                    bucket.slots[index] = entry;
+                }
+                return;
             }
+            index += 1;
+        }
+
+        if (bucket.len as usize) < CLUSTER_SIZE {
+            bucket.slots[bucket.len as usize] = entry;
+            bucket.len += 1;
             return;
         }
 
-        if let Some(slot) = bucket
-            .slots
-            .iter_mut()
-            .find(|slot| slot.epoch != epoch || slot.entry.is_none())
-        {
-            *slot = TableSlot {
-                epoch,
-                entry: Some(entry),
-            };
-            return;
-        }
-
-        let victim_index = bucket
-            .slots
-            .iter()
-            .enumerate()
-            .min_by_key(|(_, slot)| entry_value(slot.entry.unwrap()))
-            .map(|(index, _)| index)
-            .unwrap();
-
-        bucket.slots[victim_index] = TableSlot {
-            epoch,
-            entry: Some(entry),
+        let victim_index = if entry_value(bucket.slots[0]) <= entry_value(bucket.slots[1]) {
+            0
+        } else {
+            1
         };
+        bucket.slots[victim_index] = entry;
     }
 }
 
@@ -150,10 +166,11 @@ mod tests {
     #[test]
     fn table_size_fits_requested_memory() {
         let table = Table::new_for_mb(1);
-        let bytes = table.buckets.len() * size_of::<TableBucket>();
+        let bytes = table.buckets.len() * std::mem::size_of::<TableBucket>();
 
         assert!(table.buckets.len().is_power_of_two());
         assert!(bytes <= 1024 * 1024);
+        assert!(std::mem::size_of::<TableBucket>() < LEGACY_BUCKET_SIZE);
     }
 
     #[test]

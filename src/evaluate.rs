@@ -35,11 +35,11 @@ pub fn static_exchange_evaluation(board: &Board, mv: &EngineMove) -> i16 {
     let mut blocked_squares = board.occupied();
     blocked_squares ^= mv.mv.from.bitboard();
 
-    if !mv.is_capture {
+    if !mv.is_capture() {
         blocked_squares ^= mv.mv.to.bitboard();
     }
 
-    if mv.is_ep {
+    if mv.is_ep() {
         if colour == White {
             blocked_squares ^= Square::new(square.file(), Rank::Fourth).bitboard();
         } else {
@@ -61,8 +61,8 @@ pub fn static_exchange_evaluation(board: &Board, mv: &EngineMove) -> i16 {
     let mut gain: [i32; 32] = [0; 32];
     let mut d = 0;
 
-    gain[0] = mv.material_value;
-    piece = if mv.promotion {
+    gain[0] = i32::from(mv.material_value);
+    piece = if mv.is_promotion() {
         mv.mv.promotion
     } else {
         Some(mv.piece_type)
@@ -74,54 +74,54 @@ pub fn static_exchange_evaluation(board: &Board, mv: &EngineMove) -> i16 {
     ];
 
     loop {
-        let mut found = false;
         let other = board.colors(!colour) & attacking_pieces;
-
-        for piece_type in Piece::ALL {
-            if piece_type == King && !other.is_empty() {
-                break;
-            }
-
-            let pinned = board.pinned_for(colour);
-            let bad = pinned & !rays[colour as usize];
-
-            let ours = board.colored_pieces(colour, piece_type) & attacking_pieces & !bad;
-            if let Some(sq) = ours.next_square() {
-                found = true;
-
-                d += 1;
-                gain[d] = value(piece.unwrap()) - gain[d - 1];
-
-                blocked_squares ^= sq.bitboard();
-                attacking_pieces ^= sq.bitboard();
-                piece = Some(piece_type);
-
-                if piece_type == Pawn
-                    && ((colour == White && square.rank() == Rank::Eighth)
-                        || (colour == Black && square.rank() == Rank::First))
-                {
-                    gain[d] += value(Queen) - value(Pawn);
-                    piece = Some(Queen);
-                }
-
-                if matches!(piece_type, Rook | Queen) {
-                    attacking_pieces |= get_rook_moves(square, blocked_squares)
-                        & blocked_squares
-                        & (board.pieces(Rook) | board.pieces(Queen));
-                }
-                if matches!(piece_type, Pawn | Bishop | Queen) {
-                    attacking_pieces |= get_bishop_moves(square, blocked_squares)
-                        & blocked_squares
-                        & (board.pieces(Bishop) | board.pieces(Queen));
-                }
-            }
-
-            if found {
-                break;
-            }
-        }
-        if !found {
+        let bad = board.pinned_for(colour) & !rays[colour as usize];
+        let ours = board.colors(colour) & attacking_pieces & !bad;
+        let (piece_type, sq) = if let Some(sq) = (ours & board.pieces(Pawn)).next_square() {
+            (Pawn, sq)
+        } else if let Some(sq) = (ours & board.pieces(Knight)).next_square() {
+            (Knight, sq)
+        } else if let Some(sq) = (ours & board.pieces(Bishop)).next_square() {
+            (Bishop, sq)
+        } else if let Some(sq) = (ours & board.pieces(Rook)).next_square() {
+            (Rook, sq)
+        } else if let Some(sq) = (ours & board.pieces(Queen)).next_square() {
+            (Queen, sq)
+        } else if other.is_empty()
+            && let Some(sq) = (ours & board.pieces(King)).next_square()
+        {
+            (King, sq)
+        } else {
             break;
+        };
+
+        d += 1;
+        gain[d] = value(piece.unwrap()) - gain[d - 1];
+        if max(-gain[d - 1], gain[d]) < 0 {
+            break;
+        }
+
+        blocked_squares ^= sq.bitboard();
+        attacking_pieces ^= sq.bitboard();
+        piece = Some(piece_type);
+
+        if piece_type == Pawn
+            && ((colour == White && square.rank() == Rank::Eighth)
+                || (colour == Black && square.rank() == Rank::First))
+        {
+            gain[d] += value(Queen) - value(Pawn);
+            piece = Some(Queen);
+        }
+
+        if matches!(piece_type, Rook | Queen) {
+            attacking_pieces |= get_rook_moves(square, blocked_squares)
+                & blocked_squares
+                & (board.pieces(Rook) | board.pieces(Queen));
+        }
+        if matches!(piece_type, Pawn | Bishop | Queen) {
+            attacking_pieces |= get_bishop_moves(square, blocked_squares)
+                & blocked_squares
+                & (board.pieces(Bishop) | board.pieces(Queen));
         }
         colour = !colour;
     }

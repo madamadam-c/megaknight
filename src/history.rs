@@ -17,7 +17,7 @@ pub const CORRHIST_MAX: i32 = 8339;
 
 pub const CONTHIST_PLY: usize = 2;
 pub const CORRHIST_SIZE: usize = 8192;
-pub const PAWNHIST_SIZE: usize = 4096;
+pub const PAWNHIST_SIZE: usize = 1024;
 
 type QHEntry = [[[i16; 64]; 64]; 2];
 type ContHistEntry = [[[[[i16; 6]; 64]; 6]; 64]; 2];

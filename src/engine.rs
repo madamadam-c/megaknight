@@ -10,7 +10,7 @@ use cozy_chess::{
 };
 
 use crate::{
-    evaluate::{static_exchange_evaluation, value}, history::{CONTHIST_PLY, CaptureHistory, ContinuationHistory, CorrectionHistory, PawnHistory, QuietHistory, history_bonus}, nnue::NnueState, transposition::{
+    evaluate::value, history::{CONTHIST_PLY, CaptureHistory, ContinuationHistory, CorrectionHistory, PawnHistory, QuietHistory, history_bonus}, nnue::NnueState, transposition::{
         TTNodeType::{self, EXACT, LOWER, UPPER}, Table, TableEntry,
     },
 };
@@ -221,31 +221,30 @@ fn time_budget_ms(board: &Board, limits: &SearchLimits) -> Option<(u64, u64)> {
 #[derive(Clone, Copy)]
 pub struct EngineMove {
     pub mv: Move,
-    pub material_value: i32,
+    pub material_value: i16,
     pub see_score: i16,
-    pub is_capture: bool,
-    pub is_ep: bool,
-    pub is_tt: bool,
-    pub promotion: bool,
     pub piece_type: Piece,
     pub target_type: Option<Piece>,
-    pub is_castle: bool,
     pub history: i32,
+    flags: u8,
 }
 
+const _: () = assert!(std::mem::size_of::<EngineMove>() == 16);
+
 impl EngineMove {
+    const EP: u8 = 1;
+    const TT: u8 = 2;
+    const CASTLE: u8 = 4;
+
     #[inline(always)]
     pub fn new(board: &Board, mv: Move, piece: Piece, is_tt: bool) -> Self {
         let mut material_value = 0;
-        let mut capture = false;
         let mut ep = false;
-        let mut promotion = false;
         let mut target_type = None;
         let is_castle = piece == Piece::King && board.color_on(mv.to) == Some(board.side_to_move());
 
         if mv.promotion.is_some() {
             material_value += value(mv.promotion.unwrap()) - value(piece);
-            promotion = true;
         }
 
         if board.en_passant().is_some()
@@ -254,33 +253,65 @@ impl EngineMove {
             && board.piece_on(mv.to).is_none()
         {
             material_value += value(Pawn);
-            capture = true;
             ep = true;
             target_type = Some(Pawn);
         } else if let Some(target) = board.piece_on(mv.to)
             && board.color_on(mv.to) != board.color_on(mv.from)
         {
             material_value += value(target);
-            capture = true;
             target_type = Some(target);
         }
 
         Self {
             mv: mv,
-            material_value: material_value,
+            material_value: material_value as i16,
             see_score: 0,
-            is_capture: capture,
-            is_ep: ep,
-            is_tt: is_tt,
-            promotion: promotion,
             piece_type: piece,
             target_type: target_type,
-            is_castle,
             history: 0,
+            flags: Self::EP * ep as u8 | Self::TT * is_tt as u8 | Self::CASTLE * is_castle as u8,
+        }
+    }
+
+    #[inline(always)]
+    pub fn is_capture(self) -> bool {
+        self.target_type.is_some()
+    }
+
+    #[inline(always)]
+    pub fn is_ep(self) -> bool {
+        self.flags & Self::EP != 0
+    }
+
+    #[inline(always)]
+    fn is_tt(self) -> bool {
+        self.flags & Self::TT != 0
+    }
+
+    #[inline(always)]
+    pub fn is_promotion(self) -> bool {
+        self.mv.promotion.is_some()
+    }
+
+    #[inline(always)]
+    pub fn is_castle(self) -> bool {
+        self.flags & Self::CASTLE != 0
+    }
+
+    #[inline(always)]
+    fn play(self, board: &mut Board) {
+        if self.is_castle() {
+            board.play_unchecked_castle(self.mv);
+        } else if self.is_ep() {
+            board.play_unchecked_en_passant(self.mv);
+        } else if let Some(victim) = self.target_type {
+            board.play_unchecked_capture(self.mv, self.piece_type, victim);
+        } else {
+            board.play_unchecked_quiet(self.mv, self.piece_type);
         }
     }
 }
-#[derive(Clone)]
+#[derive(Clone, Default)]
 struct MoveList {
     pub good_captures: Vec<EngineMove>,
     pub bad_captures: Vec<EngineMove>,
@@ -299,6 +330,13 @@ impl MoveList {
             bad_captures: b,
             quiets: q,
         }
+    }
+
+    #[inline(always)]
+    fn clear(&mut self) {
+        self.good_captures.clear();
+        self.bad_captures.clear();
+        self.quiets.clear();
     }
 
     pub fn is_empty(&self) -> bool {
@@ -367,7 +405,6 @@ struct MovePicker {
     good_captures: Vec<EngineMove>,
     quiets: Vec<EngineMove>,
     bad_captures: Vec<EngineMove>,
-    tried_captures: Vec<EngineMove>,
     quiet_remaining: usize,
 }
 
@@ -414,7 +451,7 @@ impl MovePicker {
         let tt_move = moves
             .good_captures
             .iter()
-            .position(|mv| mv.is_tt)
+            .position(|mv| mv.is_tt())
             .map(|i| moves.good_captures.swap_remove(i));
         let stage = if tt_move.is_some() {
             Stage::TtMove
@@ -429,7 +466,6 @@ impl MovePicker {
             good_captures: moves.good_captures,
             quiets: moves.quiets,
             bad_captures: moves.bad_captures,
-            tried_captures: Vec::with_capacity(8),
             quiet_remaining,
         }
     }
@@ -445,23 +481,20 @@ impl MovePicker {
                 }
                 Stage::GoodCaptures => {
                     if let Some(mv) = pick_max(&mut self.good_captures, |mv| {
-                        if mv.is_tt {
+                        if mv.is_tt() {
                             i32::MAX
                         } else {
-                            // mv.history
                             mv.see_score as i32
-                            // 0
                         }
                     }) {
-                        self.tried_captures.push(mv);
                         return Some(mv);
                     }
                     self.stage = Stage::Quiets;
                 }
                 Stage::Quiets => {
                     let mv = pick_max_prefix(&mut self.quiets, self.quiet_remaining, |mv| {
-                        if mv.promotion {
-                            mv.material_value + 1_000_000
+                        if mv.is_promotion() {
+                            i32::from(mv.material_value) + 1_000_000
                         } else {
                             mv.history
                         }
@@ -473,12 +506,7 @@ impl MovePicker {
                     self.stage = Stage::BadCaptures;
                 }
                 Stage::BadCaptures => {
-                    if let Some(mv) = pick_max(&mut self.bad_captures, |mv| 
-                        mv.see_score as i32
-                        // mv.history
-                        // 0
-                        ) {
-                        self.tried_captures.push(mv);
+                    if let Some(mv) = pick_max(&mut self.bad_captures, |mv| mv.see_score as i32) {
                         return Some(mv);
                     }
                     self.stage = Stage::Done;
@@ -490,6 +518,18 @@ impl MovePicker {
 
     fn tried_quiets(&self) -> &[EngineMove] {
         &self.quiets[self.quiet_remaining..]
+    }
+
+    #[inline(always)]
+    fn recycle(mut self) -> MoveList {
+        self.good_captures.clear();
+        self.bad_captures.clear();
+        self.quiets.clear();
+        MoveList {
+            good_captures: self.good_captures,
+            bad_captures: self.bad_captures,
+            quiets: self.quiets,
+        }
     }
 }
 
@@ -519,6 +559,20 @@ const DUMMY_NULL: [StackMove; 2] = [
     StackMove{mv: Move{from: cozy_chess::Square::A7, to: cozy_chess::Square::A8, promotion: None}, piece: Pawn, is_null: true}
 ];
 
+const LMR_TABLE_SIZE: usize = 64;
+
+fn build_lmr_table() -> Box<[[i16; LMR_TABLE_SIZE]; LMR_TABLE_SIZE]> {
+    let mut table = Box::new([[0; LMR_TABLE_SIZE]; LMR_TABLE_SIZE]);
+    for depth in 1..LMR_TABLE_SIZE {
+        for moves_played in 1..LMR_TABLE_SIZE {
+            table[depth][moves_played] = (1018.0
+                + 1806.0 * (depth as f32).ln() * (moves_played as f32).ln() / 3.14)
+                as i16;
+        }
+    }
+    table
+}
+
 pub struct Engine {
     tt: Table,
     nnue: NnueState,
@@ -533,6 +587,8 @@ pub struct Engine {
     pawn_history: PawnHistory,
     move_stack: Vec<StackMove>,
     eval_stack: Vec<Option<i32>>,
+    move_lists: Vec<MoveList>,
+    lmr_table: Box<[[i16; LMR_TABLE_SIZE]; LMR_TABLE_SIZE]>,
 }
 
 impl Engine {
@@ -551,6 +607,8 @@ impl Engine {
             pawn_history: PawnHistory::new(),
             move_stack: Vec::with_capacity(256),
             eval_stack: vec![None; 256],
+            move_lists: vec![MoveList::default(); 256],
+            lmr_table: build_lmr_table(),
         }
     }
 
@@ -587,17 +645,21 @@ impl Engine {
         return correction;
     }
 
-    fn generate_moves(&self, board: &Board, tt_move: Option<Move>) -> MoveList {
-        let mut moves = MoveList::new(false);
+    fn generate_moves_into(
+        &self,
+        board: &Board,
+        tt_move: Option<Move>,
+        mut moves: MoveList,
+    ) -> MoveList {
+        moves.clear();
         let pawn_hash = board.pawn_hash(board.side_to_move()) ^ board.pawn_hash(!board.side_to_move());
 
         board.generate_moves(|moves_for_piece| {
             for mv in moves_for_piece {
                 let mut emv = EngineMove::new(board, mv, moves_for_piece.piece, tt_move == Some(mv));
 
-                if emv.is_capture {
-                    emv.see_score = static_exchange_evaluation(board, &emv);
-                    emv.history = self.capture_history.get(board.side_to_move() as usize, mv.to, emv.piece_type, emv.target_type.unwrap());
+                if emv.is_capture() {
+                    emv.see_score = emv.material_value;
                 } else {
                     let quiet_history = self.quiet_history.get(board.side_to_move() as usize, mv.from, mv.to);
                     let pawn_history = self.pawn_history.get(board.side_to_move() as usize, pawn_hash, mv.to, emv.piece_type);
@@ -617,8 +679,8 @@ impl Engine {
                     ) / 1024;
                 }
 
-                if emv.is_capture || emv.is_tt {
-                    if emv.see_score >= 0 || emv.is_tt {
+                if emv.is_capture() || emv.is_tt() {
+                    if emv.see_score >= 0 || emv.is_tt() {
                         moves.good_captures.push(emv);
                     } else {
                         moves.bad_captures.push(emv);
@@ -633,8 +695,17 @@ impl Engine {
         return moves;
     }
 
-    fn generate_qsearch_moves(&self, board: &Board, empty_flag: &mut bool) -> MoveList {
-        let mut moves = MoveList::new(true);
+    fn generate_moves(&self, board: &Board, tt_move: Option<Move>) -> MoveList {
+        self.generate_moves_into(board, tt_move, MoveList::new(false))
+    }
+
+    fn generate_qsearch_moves_into(
+        &self,
+        board: &Board,
+        empty_flag: &mut bool,
+        mut moves: MoveList,
+    ) -> MoveList {
+        moves.clear();
 
         let enemy_pieces = board.colors(!board.side_to_move());
         board.generate_moves(|mut moves_for_piece| {
@@ -653,23 +724,32 @@ impl Engine {
                 }
                 let mut emv = EngineMove::new(board, mv, moves_for_piece.piece, false);
 
-                if emv.is_capture {
+                if emv.is_capture() {
                     // emv.history = self.capture_history.get(board.side_to_move() as usize, mv.to, emv.piece_type, emv.target_type.unwrap());
-                    emv.see_score = static_exchange_evaluation(board, &emv);
+                    emv.see_score = emv.material_value;
                     if emv.see_score >= 0 {
                         moves.good_captures.push(emv);
                     } else {
                         moves.bad_captures.push(emv);
                     }
-                } else if emv.promotion {
+                } else if emv.is_promotion() {
                     moves.quiets.push(emv);
-                    emv.history = self.quiet_history.get(board.side_to_move() as usize, mv.from, mv.to);
                 }
             }
             false
         });
 
         return moves;
+    }
+
+    #[inline(always)]
+    fn take_move_list(&mut self, ply: usize) -> MoveList {
+        std::mem::take(&mut self.move_lists[ply])
+    }
+
+    #[inline(always)]
+    fn put_move_list(&mut self, ply: usize, moves: MoveList) {
+        self.move_lists[ply] = moves;
     }
 
     fn quiesce(
@@ -716,15 +796,17 @@ impl Engine {
         }
 
         let mut empty_flag = true;
-        let moves;
-        if in_check {
-            moves = self.generate_moves(board, None);
+        let move_list = self.take_move_list(ply as usize);
+        let moves = if in_check {
+            let moves = self.generate_moves_into(board, None, move_list);
             empty_flag = moves.is_empty();
+            moves
         } else {
-            moves = self.generate_qsearch_moves(board, &mut empty_flag);
-        }
+            self.generate_qsearch_moves_into(board, &mut empty_flag, move_list)
+        };
 
         if empty_flag {
+            self.put_move_list(ply as usize, moves);
             return Some(terminal_score(board, ply));
         }
 
@@ -742,7 +824,7 @@ impl Engine {
             let mut next_board = board.clone();
             let previous_nnue = self.nnue;
             self.nnue.play_move(board.side_to_move(), &mv);
-            next_board.play_unchecked(mv.mv);
+            mv.play(&mut next_board);
 
             context.history.push(next_board.hash());
             self.move_stack.push(StackMove {mv: mv.mv, piece: mv.piece_type, is_null: false});
@@ -751,7 +833,11 @@ impl Engine {
             self.move_stack.pop();
             self.nnue = previous_nnue;
 
-            let x = -child?;
+            let Some(child) = child else {
+                self.put_move_list(ply as usize, picker.recycle());
+                return None;
+            };
+            let x = -child;
 
             if x > result {
                 result = x;
@@ -765,6 +851,7 @@ impl Engine {
             }
         }
 
+        self.put_move_list(ply as usize, picker.recycle());
         Some(result)
     }
 
@@ -783,7 +870,7 @@ impl Engine {
         let mut next_board = board.clone();
         let previous_nnue = self.nnue;
         self.nnue.play_move(board.side_to_move(), &mv);
-        next_board.play_unchecked(mv.mv);
+        mv.play(&mut next_board);
 
         context.history.push(next_board.hash());
         self.move_stack.push(StackMove { mv: mv.mv, piece: mv.piece_type, is_null: false });
@@ -943,7 +1030,8 @@ impl Engine {
         //     depth -= 1;
         // }
 
-        let moves = self.generate_moves(board, tt_move);
+        let move_list = self.take_move_list(ply as usize);
+        let moves = self.generate_moves_into(board, tt_move, move_list);
         let stm_index = if board.side_to_move() == White { 0 } else { 1 };
         let mut picker = MovePicker::new(moves);
 
@@ -962,7 +1050,7 @@ impl Engine {
             moves_played += 1;
 
             // lmp
-            if !pv && !in_check && moves_played >= lmp_cap && !mv.is_capture && !mv.promotion {
+            if !pv && !in_check && moves_played >= lmp_cap && !mv.is_capture() && !mv.is_promotion() {
                 picker.stage = Stage::BadCaptures;
                 continue;
             }   
@@ -971,14 +1059,19 @@ impl Engine {
             let mut lmr_depth = 0;
             if depth >= 2 && 
                moves_played >= 2 && 
-               !mv.is_capture && 
-               !mv.promotion && !in_check 
+               !mv.is_capture() &&
+               !mv.is_promotion() && !in_check
             {
-                let lmr_base = 1018; 
-                let lmr_log_scale = 1806; 
-
                 // base formula [credit: obsidian on cpw]
-                lmr_depth += ((lmr_base as f32) + (lmr_log_scale as f32) * (depth as f32).ln() * (moves_played as f32).ln() / 3.14) as i32;
+                lmr_depth += if depth < LMR_TABLE_SIZE as i32
+                    && moves_played < LMR_TABLE_SIZE as i32
+                {
+                    i32::from(self.lmr_table[depth as usize][moves_played as usize])
+                } else {
+                    (1018.0
+                        + 1806.0 * (depth as f32).ln() * (moves_played as f32).ln() / 3.14)
+                        as i32
+                };
 
                 // reduce more on a cutnode
                 // lmr_depth += 512 * (expected == CUT) as i32;
@@ -998,7 +1091,7 @@ impl Engine {
                 lmr_depth = lmr_depth.max(0) / 1024;
             }
 
-            let mut x = self.search_move(
+            let Some(mut x) = self.search_move(
                 board,
                 mv,
                 depth - 1 - lmr_depth,
@@ -1008,10 +1101,13 @@ impl Engine {
                 lmr_depth == 0,
                 first_move,
                 context,
-            )?;
+            ) else {
+                self.put_move_list(ply as usize, picker.recycle());
+                return None;
+            };
 
             if lmr_depth > 0 && x > bounds.alpha {
-                x = self.search_move(
+                let Some(researched) = self.search_move(
                     board,
                     mv,
                     depth - 1,
@@ -1021,7 +1117,11 @@ impl Engine {
                     true,
                     first_move,
                     context,
-                )?;
+                ) else {
+                    self.put_move_list(ply as usize, picker.recycle());
+                    return None;
+                };
+                x = researched;
             }
 
             if x > result {
@@ -1035,7 +1135,7 @@ impl Engine {
 
             if x >= bounds.beta {
                 // actual = NodeType::CUT;
-                if !mv.is_capture && !mv.promotion {
+                if !mv.is_capture() && !mv.is_promotion() {
                     let pawn_hash = board.pawn_hash(board.side_to_move()) ^ board.pawn_hash(!board.side_to_move());
                     let bonus = history_bonus(depth);
                     let malus = 1306 * (-history_bonus(depth)) / 1024;
@@ -1061,7 +1161,7 @@ impl Engine {
                             self.continuation_history.update(ply, stm_index, prev.mv.to, prev.piece, mv2.mv.to, mv2.piece_type, malus);
                         }
                     }
-                } else if mv.is_capture {
+                } else if mv.is_capture() {
                     // self.capture_history.update(stm_index, mv.mv.to, mv.piece_type, mv.target_type.unwrap(), history_bonus(depth));
                     // for mv2 in picker.tried_captures {
                     //     if mv2.mv == mv.mv {continue;}
@@ -1073,6 +1173,8 @@ impl Engine {
 
             first_move = false;
         }
+
+        self.put_move_list(ply as usize, picker.recycle());
 
         let node_type = {
             if result >= original_bounds.beta {
@@ -1089,7 +1191,7 @@ impl Engine {
         correction = self.get_correction_value(board);
         static_eval += correction;
 
-        if !in_check && best_move.is_none_or(|mv| !mv.is_capture && !mv.promotion) &&
+        if !in_check && best_move.is_none_or(|mv| !mv.is_capture() && !mv.is_promotion()) &&
             !(node_type == TTNodeType::LOWER && result <= static_eval) && !(node_type == TTNodeType::UPPER && result >= static_eval)
             && result.abs() <= 95_000
         {

@@ -52,7 +52,7 @@ fn qsearch_generates_captures_but_not_quiet_moves() {
             promotion: None,
         }
     );
-    assert!(moves[0].is_capture);
+    assert!(moves[0].is_capture());
     let mut after = board.clone();
     after.play_unchecked(moves[0].mv);
     let capture_score = -NnueState::from_board(&after).evaluate(after.side_to_move());
@@ -77,7 +77,7 @@ fn qsearch_generates_en_passant() {
             promotion: None,
         }
     );
-    assert!(moves[0].is_ep);
+    assert!(moves[0].is_ep());
 }
 
 #[test]
@@ -93,7 +93,7 @@ fn qsearch_generates_all_quiet_promotions() {
     assert!(
         moves
             .iter()
-            .all(|mv| { mv.mv.from == Square::A7 && mv.mv.to == Square::A8 && mv.promotion })
+            .all(|mv| { mv.mv.from == Square::A7 && mv.mv.to == Square::A8 && mv.is_promotion() })
     );
     assert_eq!(
         promotions,
@@ -205,9 +205,9 @@ fn quiet_promotions_are_ordered_before_maximum_history_quiets() {
         picked.push(mv);
     }
 
-    assert!(picked[..4].iter().all(|mv| mv.promotion));
+    assert!(picked[..4].iter().all(|mv| mv.is_promotion()));
     assert_eq!(picked[0].mv.promotion, Some(Piece::Queen));
-    assert!(picked[4..].iter().all(|mv| !mv.promotion));
+    assert!(picked[4..].iter().all(|mv| !mv.is_promotion()));
 }
 
 #[test]

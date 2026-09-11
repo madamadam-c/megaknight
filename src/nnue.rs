@@ -176,7 +176,7 @@ impl NnueState {
 
     #[inline(always)]
     pub fn play_move(&mut self, color: Color, mv: &EngineMove) {
-        if mv.is_castle {
+        if mv.is_castle() {
             self.play_castle(color, mv);
             return;
         }
@@ -184,7 +184,7 @@ impl NnueState {
         self.remove_piece(color, mv.piece_type, mv.mv.from);
 
         if let Some(victim) = mv.target_type {
-            let victim_square = if mv.is_ep {
+            let victim_square = if mv.is_ep() {
                 Square::new(mv.mv.to.file(), Rank::Fifth.relative_to(color))
             } else {
                 mv.mv.to
