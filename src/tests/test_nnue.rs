@@ -21,8 +21,19 @@ fn assert_incremental_move(fen: &str, move_text: &str) {
 
 #[test]
 fn state_is_two_cache_line_sized_accumulators() {
-    assert_eq!(std::mem::size_of::<NnueState>(), 256);
+    assert_eq!(
+        std::mem::size_of::<NnueState>(),
+        2 * std::mem::size_of::<Accumulator>()
+    );
     assert_eq!(std::mem::align_of::<NnueState>(), 32);
+}
+
+#[test]
+fn hidden_size_is_inferred_from_padded_file_size() {
+    assert_eq!(hidden_size_for_file_size(24_704), 16);
+    assert_eq!(hidden_size_for_file_size(98_752), 64);
+    assert_eq!(hidden_size_for_file_size(197_440), 128);
+    assert_eq!(HIDDEN_SIZE, hidden_size_for_file_size(NETWORK_FILE_SIZE));
 }
 
 #[test]
@@ -98,8 +109,7 @@ fn state_keeps_a_distinct_accumulator_for_each_perspective() {
 }
 
 #[test]
-fn startpos_evaluation_is_bit_stable() {
+fn startpos_evaluation_is_symmetric() {
     let state = NnueState::from_board(&Board::default());
-    assert_eq!(state.evaluate(White), 44);
-    assert_eq!(state.evaluate(Black), 44);
+    assert_eq!(state.evaluate(White), state.evaluate(Black));
 }
