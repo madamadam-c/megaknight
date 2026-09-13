@@ -18,6 +18,7 @@ use crate::engine::{Engine, SearchInfo, SearchLimits, SearchRequest, SearchResul
 mod bulk;
 mod engine;
 mod evaluate;
+mod genfens;
 mod history;
 mod nnue;
 mod selfplay;
@@ -161,6 +162,27 @@ fn parse_hash_option(line: &str) -> Option<u64> {
         .map(|megabytes| megabytes.clamp(1, 65_536))
 }
 
+fn parse_minimal_option(line: &str) -> Option<bool> {
+    let parts: Vec<&str> = line.split_whitespace().collect();
+    let name_start = parts
+        .iter()
+        .position(|part| part.eq_ignore_ascii_case("name"))?
+        + 1;
+    let value_start = parts
+        .iter()
+        .position(|part| part.eq_ignore_ascii_case("value"))?;
+    let name = parts.get(name_start..value_start)?.join(" ");
+    if !name.eq_ignore_ascii_case("minimal") {
+        return None;
+    }
+
+    match parts.get(value_start + 1)?.to_ascii_lowercase().as_str() {
+        "true" | "1" => Some(true),
+        "false" | "0" => Some(false),
+        _ => None,
+    }
+}
+
 fn parse_named_spin_option(line: &str) -> Option<(String, i32)> {
     let parts: Vec<&str> = line.split_whitespace().collect();
     let name_start = parts
@@ -178,6 +200,7 @@ fn parse_named_spin_option(line: &str) -> Option<(String, i32)> {
 fn announce_options() {
     print_output("option name Threads type spin default 1 min 1 max 1");
     print_output("option name Hash type spin default 16 min 1 max 65536");
+    print_output("option name Minimal type check default false");
 }
 
 fn print_output(output: &str) {
@@ -189,7 +212,10 @@ fn format_uci_move(board: &Board, chess_move: Move) -> String {
     display_uci_move(board, chess_move).to_string()
 }
 
-fn print_info(id: u64, active_id: Option<u64>, board: &Board, info: SearchInfo) {
+fn print_info(id: u64, active_id: Option<u64>, board: &Board, info: SearchInfo, minimal: bool) {
+    if minimal {
+        return;
+    }
     if active_id != Some(id) {
         return;
     }
@@ -249,7 +275,20 @@ fn spawn_input_reader(event_tx: mpsc::Sender<MainEvent>) -> JoinHandle<()> {
 }
 
 fn main() {
-    match std::env::args().nth(1).as_deref() {
+    let first_argument = std::env::args().nth(1);
+    if first_argument
+        .as_deref()
+        .and_then(|argument| argument.split_whitespace().next())
+        == Some("genfens")
+    {
+        if let Err(error) = genfens::run(first_argument.as_deref().unwrap()) {
+            eprintln!("genfens failed: {error}");
+            std::process::exit(1);
+        }
+        return;
+    }
+
+    match first_argument.as_deref() {
         Some("bench") => {
             run_bench();
             return;
@@ -369,6 +408,7 @@ fn run_uci() {
     let mut history = vec![board.hash()];
     let mut active_search: Option<(u64, Arc<AtomicBool>)> = None;
     let mut next_search_id = 0;
+    let mut minimal = false;
     let mut quitting = false;
 
     while !quitting {
@@ -376,7 +416,13 @@ fn run_uci() {
             Ok(MainEvent::Worker(output)) => {
                 match output {
                     WorkerOutput::Info { id, board, info } => {
-                        print_info(id, active_search.as_ref().map(|(id, _)| *id), &board, info);
+                        print_info(
+                            id,
+                            active_search.as_ref().map(|(id, _)| *id),
+                            &board,
+                            info,
+                            minimal,
+                        );
                     }
                     WorkerOutput::BestMove { id, board, result } => {
                         print_best_move(id, &mut active_search, &board, result);
@@ -442,6 +488,9 @@ fn run_uci() {
                 quitting = true;
             }
             Some("setoption") => {
+                if let Some(value) = parse_minimal_option(&line) {
+                    minimal = value;
+                }
                 if let Some(megabytes) = parse_hash_option(&line) {
                     if let Some((_, stop)) = &active_search {
                         stop.store(true, Ordering::Relaxed);
