@@ -44,7 +44,7 @@ pub fn run(command: &str) -> Result<(), String> {
     let mut stdout = io::LineWriter::new(stdout.lock());
     for _ in 0..count {
         let fen = match sampler.as_mut() {
-            Some(sampler) => sampler.sample(&mut rng, random_plies)?,
+            Some(sampler) => sampler.sample_board(&mut rng, random_plies)?.to_string(),
             None => random_position(&mut rng, random_plies),
         };
         writeln!(stdout, "info string genfens {fen}")
@@ -97,13 +97,13 @@ fn parse_positive(value: Option<&str>, name: &str) -> Result<usize, String> {
     Ok(value)
 }
 
-struct BookSampler {
+pub struct BookSampler {
     reader: BufReader<File>,
     length: u64,
 }
 
 impl BookSampler {
-    fn open(path: impl AsRef<Path>) -> Result<Self, String> {
+    pub fn open(path: impl AsRef<Path>) -> Result<Self, String> {
         let path = path.as_ref();
         let file = File::open(path)
             .map_err(|error| format!("failed to open book {}: {error}", path.display()))?;
@@ -120,7 +120,11 @@ impl BookSampler {
         })
     }
 
-    fn sample(&mut self, rng: &mut SplitMix64, random_plies: usize) -> Result<String, String> {
+    pub fn sample_board(
+        &mut self,
+        rng: &mut SplitMix64,
+        random_plies: usize,
+    ) -> Result<Board, String> {
         for _ in 0..MAX_SAMPLE_ATTEMPTS {
             let offset = rng.next_u64() % self.length;
             self.reader
@@ -148,7 +152,7 @@ impl BookSampler {
                     .parse::<Board>()
                     .map_err(|_| "book produced an invalid FEN".to_string())?;
                 randomize_position(&mut board, random_plies, rng);
-                return Ok(board.to_string());
+                return Ok(board);
             }
         }
 
@@ -217,14 +221,14 @@ fn randomize_position(board: &mut Board, plies: usize, rng: &mut SplitMix64) {
     }
 }
 
-struct SplitMix64(u64);
+pub(crate) struct SplitMix64(u64);
 
 impl SplitMix64 {
-    const fn new(seed: u64) -> Self {
+    pub(crate) const fn new(seed: u64) -> Self {
         Self(seed)
     }
 
-    fn next_u64(&mut self) -> u64 {
+    pub(crate) fn next_u64(&mut self) -> u64 {
         self.0 = self.0.wrapping_add(0x9e37_79b9_7f4a_7c15);
         let mut value = self.0;
         value = (value ^ (value >> 30)).wrapping_mul(0xbf58_476d_1ce4_e5b9);

@@ -380,6 +380,8 @@ fn run_uci() {
     let (event_tx, event_rx) = mpsc::channel::<MainEvent>();
     let _input_handle = spawn_input_reader(event_tx.clone());
     let (command_tx, command_rx) = mpsc::channel::<Command>();
+    let minimal_output = Arc::new(AtomicBool::new(false));
+    let minimal_output_for_worker = Arc::clone(&minimal_output);
 
     let worker_handle = thread::spawn(move || {
         let mut engine = Engine::new();
@@ -390,11 +392,13 @@ fn run_uci() {
                     let event_tx_for_info = &event_tx;
                     let search_board = request.board.clone();
                     let result = engine.search(&request, |info| {
-                        let _ = event_tx_for_info.send(MainEvent::Worker(WorkerOutput::Info {
-                            id,
-                            board: search_board.clone(),
-                            info,
-                        }));
+                        if !minimal_output_for_worker.load(Ordering::Relaxed) {
+                            let _ = event_tx_for_info.send(MainEvent::Worker(WorkerOutput::Info {
+                                id,
+                                board: search_board.clone(),
+                                info,
+                            }));
+                        }
                     });
                     let _ = event_tx.send(MainEvent::Worker(WorkerOutput::BestMove {
                         id,
@@ -413,7 +417,6 @@ fn run_uci() {
     let mut history = vec![board.hash()];
     let mut active_search: Option<(u64, Arc<AtomicBool>)> = None;
     let mut next_search_id = 0;
-    let mut minimal = false;
     let mut quitting = false;
 
     while !quitting {
@@ -426,7 +429,7 @@ fn run_uci() {
                             active_search.as_ref().map(|(id, _)| *id),
                             &board,
                             info,
-                            minimal,
+                            minimal_output.load(Ordering::Relaxed),
                         );
                     }
                     WorkerOutput::BestMove { id, board, result } => {
@@ -494,7 +497,7 @@ fn run_uci() {
             }
             Some("setoption") => {
                 if let Some(value) = parse_minimal_option(&line) {
-                    minimal = value;
+                    minimal_output.store(value, Ordering::Relaxed);
                 }
                 if let Some(megabytes) = parse_hash_option(&line) {
                     if let Some((_, stop)) = &active_search {
