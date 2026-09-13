@@ -204,8 +204,13 @@ fn announce_options() {
 }
 
 fn print_output(output: &str) {
-    println!("{output}");
-    io::stdout().flush().unwrap();
+    let mut stdout = io::stdout().lock();
+    if writeln!(stdout, "{output}")
+        .and_then(|()| stdout.flush())
+        .is_err()
+    {
+        std::process::exit(0);
+    }
 }
 
 fn format_uci_move(board: &Board, chess_move: Move) -> String {

@@ -7,6 +7,7 @@ use std::{
 use cozy_chess::Board;
 
 const MAX_SAMPLE_ATTEMPTS: usize = 128;
+const DEFAULT_RANDOM_PLIES: usize = 6;
 
 pub fn run(command: &str) -> Result<(), String> {
     let mut arguments = command.split_whitespace();
@@ -30,6 +31,8 @@ pub fn run(command: &str) -> Result<(), String> {
     let book = arguments
         .next()
         .ok_or_else(|| "genfens requires book <path|None>".to_string())?;
+    let extra = arguments.collect::<Vec<_>>();
+    let random_plies = parse_random_plies(&extra)?;
     let mut rng = SplitMix64::new(seed);
     let mut sampler = if book.eq_ignore_ascii_case("none") {
         None
@@ -41,8 +44,8 @@ pub fn run(command: &str) -> Result<(), String> {
     let mut stdout = io::LineWriter::new(stdout.lock());
     for _ in 0..count {
         let fen = match sampler.as_mut() {
-            Some(sampler) => sampler.sample(&mut rng)?,
-            None => random_position(&mut rng),
+            Some(sampler) => sampler.sample(&mut rng, random_plies)?,
+            None => random_position(&mut rng, random_plies),
         };
         writeln!(stdout, "info string genfens {fen}")
             .map_err(|error| format!("failed to write genfens output: {error}"))?;
@@ -51,6 +54,36 @@ pub fn run(command: &str) -> Result<(), String> {
         .flush()
         .map_err(|error| format!("failed to flush genfens output: {error}"))?;
     Ok(())
+}
+
+fn parse_random_plies(arguments: &[&str]) -> Result<usize, String> {
+    let mut random_plies = DEFAULT_RANDOM_PLIES;
+    let mut index = 0;
+    while index < arguments.len() {
+        let argument = arguments[index];
+        let (name, inline_value) = argument.split_once('=').unwrap_or((argument, ""));
+        if !matches!(
+            name,
+            "--random-plies" | "random-plies" | "--plies" | "plies"
+        ) {
+            index += 1;
+            continue;
+        }
+
+        let value = if inline_value.is_empty() {
+            index += 1;
+            arguments
+                .get(index)
+                .ok_or_else(|| "random plies option requires a value".to_string())?
+        } else {
+            inline_value
+        };
+        random_plies = value
+            .parse::<usize>()
+            .map_err(|_| "invalid random plies value".to_string())?;
+        index += 1;
+    }
+    Ok(random_plies)
 }
 
 fn parse_positive(value: Option<&str>, name: &str) -> Result<usize, String> {
@@ -87,7 +120,7 @@ impl BookSampler {
         })
     }
 
-    fn sample(&mut self, rng: &mut SplitMix64) -> Result<String, String> {
+    fn sample(&mut self, rng: &mut SplitMix64, random_plies: usize) -> Result<String, String> {
         for _ in 0..MAX_SAMPLE_ATTEMPTS {
             let offset = rng.next_u64() % self.length;
             self.reader
@@ -111,7 +144,11 @@ impl BookSampler {
                 continue;
             }
             if let Some(fen) = normalize_book_line(&line) {
-                return Ok(fen);
+                let mut board = fen
+                    .parse::<Board>()
+                    .map_err(|_| "book produced an invalid FEN".to_string())?;
+                randomize_position(&mut board, random_plies, rng);
+                return Ok(board.to_string());
             }
         }
 
@@ -153,13 +190,24 @@ fn epd_value(fields: &[&str], name: &str) -> Option<u16> {
         .ok()
 }
 
-fn random_position(rng: &mut SplitMix64) -> String {
+fn random_position(rng: &mut SplitMix64, random_plies: usize) -> String {
     let mut board = Board::default();
-    let plies = 4 + (rng.next_u64() % 21) as usize;
+    randomize_position(&mut board, random_plies, rng);
+    board.to_string()
+}
+
+fn randomize_position(board: &mut Board, plies: usize, rng: &mut SplitMix64) {
     for _ in 0..plies {
         let mut moves = Vec::new();
         board.generate_moves(|piece_moves| {
-            moves.extend(piece_moves);
+            moves.extend(piece_moves.into_iter().filter(|&chess_move| {
+                chess_move.promotion.is_none()
+                    && board.color_on(chess_move.to).is_none()
+                    && !(board
+                        .piece_on(chess_move.from)
+                        .is_some_and(|piece| piece == cozy_chess::Piece::Pawn)
+                        && chess_move.from.file() != chess_move.to.file())
+            }));
             false
         });
         if moves.is_empty() {
@@ -167,7 +215,6 @@ fn random_position(rng: &mut SplitMix64) -> String {
         }
         board.play_unchecked(moves[rng.next_u64() as usize % moves.len()]);
     }
-    board.to_string()
 }
 
 struct SplitMix64(u64);
@@ -210,7 +257,14 @@ mod tests {
     fn random_positions_are_valid_full_fens() {
         let mut rng = SplitMix64::new(123);
         for _ in 0..32 {
-            assert!(random_position(&mut rng).split_whitespace().count() == 6);
+            assert!(random_position(&mut rng, 6).parse::<Board>().is_ok());
         }
+    }
+
+    #[test]
+    fn parses_random_plies_options() {
+        assert_eq!(parse_random_plies(&[]).unwrap(), 6);
+        assert_eq!(parse_random_plies(&["--random-plies", "9"]).unwrap(), 9);
+        assert_eq!(parse_random_plies(&["--plies=3"]).unwrap(), 3);
     }
 }

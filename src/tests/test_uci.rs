@@ -2,7 +2,8 @@ use cozy_chess::{Board, Color, util::parse_uci_move};
 
 use crate::{
     engine::{CorrectionWeight, quantize_correction_weight},
-    format_uci_move, parse_correction_weight_option, parse_go, parse_hash_option, parse_position,
+    format_uci_move, parse_correction_weight_option, parse_go, parse_hash_option,
+    parse_minimal_option, parse_position,
 };
 
 #[test]
@@ -66,6 +67,19 @@ fn parse_hash_option_reads_megabytes() {
     assert_eq!(parse_hash_option("setoption name Hash value 64"), Some(64));
     assert_eq!(parse_hash_option("setoption name Hash value 0"), Some(1));
     assert_eq!(parse_hash_option("setoption name Threads value 4"), None);
+}
+
+#[test]
+fn parse_minimal_option_accepts_case_insensitive_boolean_values() {
+    assert_eq!(
+        parse_minimal_option("setoption name Minimal value true"),
+        Some(true)
+    );
+    assert_eq!(
+        parse_minimal_option("setoption name Minimal value False"),
+        Some(false)
+    );
+    assert_eq!(parse_minimal_option("setoption name Hash value true"), None);
 }
 
 #[test]
