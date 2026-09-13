@@ -46,9 +46,9 @@ impl QuietHistory {
 
     pub fn update(&mut self, stm: usize, from: Square, to: Square, bonus: i32) {
         update_history(
-            &mut self.history[stm][from as usize][to as usize], 
+            &mut self.history[stm][from as usize][to as usize],
             bonus,
-            QUIET_HISTORY_MAX
+            QUIET_HISTORY_MAX,
         );
     }
 }
@@ -60,23 +60,42 @@ pub struct ContinuationHistory {
 impl ContinuationHistory {
     pub fn new() -> Self {
         Self {
-            history: array::from_fn(|_| {Box::new([[[[[0i16; 6]; 64]; 6]; 64]; 2])}),
+            history: array::from_fn(|_| Box::new([[[[[0i16; 6]; 64]; 6]; 64]; 2])),
         }
     }
 
     pub fn clear(&mut self) {
-        self.history = array::from_fn(|_| {Box::new([[[[[0i16; 6]; 64]; 6]; 64]; 2])})
+        self.history = array::from_fn(|_| Box::new([[[[[0i16; 6]; 64]; 6]; 64]; 2]))
     }
 
-    pub fn get(&self, ply: usize, stm: usize, prev_to: Square, prev_piece: Piece, to: Square, piece: Piece) -> i32 {
-        self.history[ply][stm][prev_to as usize][prev_piece as usize][to as usize][piece as usize] as i32
+    pub fn get(
+        &self,
+        ply: usize,
+        stm: usize,
+        prev_to: Square,
+        prev_piece: Piece,
+        to: Square,
+        piece: Piece,
+    ) -> i32 {
+        self.history[ply][stm][prev_to as usize][prev_piece as usize][to as usize][piece as usize]
+            as i32
     }
 
-    pub fn update(&mut self, ply: usize, stm: usize, prev_to: Square, prev_piece: Piece, to: Square, piece: Piece, bonus: i32) {
+    pub fn update(
+        &mut self,
+        ply: usize,
+        stm: usize,
+        prev_to: Square,
+        prev_piece: Piece,
+        to: Square,
+        piece: Piece,
+        bonus: i32,
+    ) {
         update_history(
-            &mut self.history[ply][stm][prev_to as usize][prev_piece as usize][to as usize][piece as usize], 
+            &mut self.history[ply][stm][prev_to as usize][prev_piece as usize][to as usize]
+                [piece as usize],
             bonus,
-            QUIET_HISTORY_MAX
+            QUIET_HISTORY_MAX,
         );
     }
 }
@@ -102,9 +121,9 @@ impl CaptureHistory {
 
     pub fn update(&mut self, stm: usize, to: Square, piece: Piece, target: Piece, bonus: i32) {
         update_history(
-            &mut self.history[stm][to as usize][piece as usize][target as usize], 
+            &mut self.history[stm][to as usize][piece as usize][target as usize],
             bonus,
-            QUIET_HISTORY_MAX
+            QUIET_HISTORY_MAX,
         );
     }
 }
@@ -131,9 +150,9 @@ impl CorrectionHistory {
     pub fn update(&mut self, stm: usize, hash: u64, bonus: i32) {
         let clamp = 278 * CORRHIST_MAX / 1024;
         update_history(
-            &mut self.history[stm][(hash as usize) & (CORRHIST_SIZE - 1)], 
+            &mut self.history[stm][(hash as usize) & (CORRHIST_SIZE - 1)],
             bonus.clamp(-clamp, clamp),
-            CORRHIST_MAX
+            CORRHIST_MAX,
         );
     }
 }
@@ -154,14 +173,23 @@ impl PawnHistory {
     }
 
     pub fn get(&self, stm: usize, pawn_hash: u64, to: Square, piece_type: Piece) -> i32 {
-        self.history[stm][(pawn_hash as usize) & (PAWNHIST_SIZE - 1)][piece_type as usize][to as usize] as i32
+        self.history[stm][(pawn_hash as usize) & (PAWNHIST_SIZE - 1)][piece_type as usize]
+            [to as usize] as i32
     }
 
-    pub fn update(&mut self, stm: usize, pawn_hash: u64, to: Square, piece_type: Piece, bonus: i32) {
+    pub fn update(
+        &mut self,
+        stm: usize,
+        pawn_hash: u64,
+        to: Square,
+        piece_type: Piece,
+        bonus: i32,
+    ) {
         update_history(
-            &mut self.history[stm][(pawn_hash as usize) & (PAWNHIST_SIZE - 1)][piece_type as usize][to as usize],
+            &mut self.history[stm][(pawn_hash as usize) & (PAWNHIST_SIZE - 1)][piece_type as usize]
+                [to as usize],
             bonus,
-            QUIET_HISTORY_MAX
+            QUIET_HISTORY_MAX,
         );
     }
 }
