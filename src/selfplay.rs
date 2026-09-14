@@ -363,11 +363,19 @@ fn run(config: SelfplayConfig) -> Result<(), AnyError> {
     for worker in workers {
         let _ = worker.join();
     }
+    print_progress(written, &config, &counters, started);
     output.flush()?;
     eprintln!();
 
     if let Some(error) = first_error {
         return Err(error.into());
+    }
+    if let Some(end_index) = config.end_index {
+        let processed = counters.games.load(Ordering::Relaxed);
+        let expected = end_index - config.start_index;
+        if processed != expected {
+            return Err(format!("expected {expected} games but processed {processed}").into());
+        }
     }
     if let Some(positions) = config.positions
         && written != positions
