@@ -508,7 +508,7 @@ fn run_uci() {
             }
             _ => {}
         }
-    }
+    }// gurt
 
     let _ = worker_handle.join();
 }
