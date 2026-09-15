@@ -14,6 +14,9 @@ pub fn history_bonus(depth: i32) -> i32 {
     depth.saturating_mul(depth)
 }
 
+pub const QUIET_HISTORY_MAX: i32 = 15582;
+pub const CORRHIST_MAX: i32 = 8339;
+
 pub const CONTHIST_PLY: usize = 2;
 pub const CORRHIST_SIZE: usize = 8192;
 pub const PAWNHIST_SIZE: usize = 4096;
@@ -30,7 +33,11 @@ pub struct QuietHistory {
 }
 
 impl QuietHistory {
-    pub fn new(params: TuneableParams) -> Self {
+    pub fn new() -> Self {
+        Self::new_with_params(TuneableParams::default())
+    }
+
+    pub fn new_with_params(params: TuneableParams) -> Self {
         Self {
             history: Box::new([[[0i16; 64]; 64]; 2]),
             params,
@@ -47,9 +54,9 @@ impl QuietHistory {
 
     pub fn update(&mut self, stm: usize, from: Square, to: Square, bonus: i32) {
         update_history(
-            &mut self.history[stm][from as usize][to as usize], 
+            &mut self.history[stm][from as usize][to as usize],
             bonus,
-            self.params.history_max
+            self.params.history_max,
         );
     }
 }
@@ -60,26 +67,49 @@ pub struct ContinuationHistory {
 }
 
 impl ContinuationHistory {
-    pub fn new(params: TuneableParams) -> Self {
+    pub fn new() -> Self {
+        Self::new_with_params(TuneableParams::default())
+    }
+
+    pub fn new_with_params(params: TuneableParams) -> Self {
         Self {
-            history: array::from_fn(|_| {Box::new([[[[[0i16; 6]; 64]; 6]; 64]; 2])}),
+            history: array::from_fn(|_| Box::new([[[[[0i16; 6]; 64]; 6]; 64]; 2])),
             params,
         }
     }
 
     pub fn clear(&mut self) {
-        self.history = array::from_fn(|_| {Box::new([[[[[0i16; 6]; 64]; 6]; 64]; 2])})
+        self.history = array::from_fn(|_| Box::new([[[[[0i16; 6]; 64]; 6]; 64]; 2]))
     }
 
-    pub fn get(&self, ply: usize, stm: usize, prev_to: Square, prev_piece: Piece, to: Square, piece: Piece) -> i32 {
-        self.history[ply][stm][prev_to as usize][prev_piece as usize][to as usize][piece as usize] as i32
+    pub fn get(
+        &self,
+        ply: usize,
+        stm: usize,
+        prev_to: Square,
+        prev_piece: Piece,
+        to: Square,
+        piece: Piece,
+    ) -> i32 {
+        self.history[ply][stm][prev_to as usize][prev_piece as usize][to as usize][piece as usize]
+            as i32
     }
 
-    pub fn update(&mut self, ply: usize, stm: usize, prev_to: Square, prev_piece: Piece, to: Square, piece: Piece, bonus: i32) {
+    pub fn update(
+        &mut self,
+        ply: usize,
+        stm: usize,
+        prev_to: Square,
+        prev_piece: Piece,
+        to: Square,
+        piece: Piece,
+        bonus: i32,
+    ) {
         update_history(
-            &mut self.history[ply][stm][prev_to as usize][prev_piece as usize][to as usize][piece as usize], 
+            &mut self.history[ply][stm][prev_to as usize][prev_piece as usize][to as usize]
+                [piece as usize],
             bonus,
-            self.params.history_max
+            self.params.history_max,
         );
     }
 }
@@ -90,7 +120,11 @@ pub struct CaptureHistory {
 }
 
 impl CaptureHistory {
-    pub fn new(params: TuneableParams) -> Self {
+    pub fn new() -> Self {
+        Self::new_with_params(TuneableParams::default())
+    }
+
+    pub fn new_with_params(params: TuneableParams) -> Self {
         Self {
             history: Box::new([[[[0i16; 6]; 6]; 64]; 2]),
             params,
@@ -107,20 +141,24 @@ impl CaptureHistory {
 
     pub fn update(&mut self, stm: usize, to: Square, piece: Piece, target: Piece, bonus: i32) {
         update_history(
-            &mut self.history[stm][to as usize][piece as usize][target as usize], 
+            &mut self.history[stm][to as usize][piece as usize][target as usize],
             bonus,
-            self.params.history_max
+            self.params.history_max,
         );
     }
 }
 
 pub struct CorrectionHistory {
     history: Box<CorrHistEntry>,
-    params: TuneableParams
+    params: TuneableParams,
 }
 
 impl CorrectionHistory {
-    pub fn new(params: TuneableParams) -> Self {
+    pub fn new() -> Self {
+        Self::new_with_params(TuneableParams::default())
+    }
+
+    pub fn new_with_params(params: TuneableParams) -> Self {
         Self {
             history: Box::new([[0i16; CORRHIST_SIZE]; 2]),
             params,
@@ -138,9 +176,9 @@ impl CorrectionHistory {
     pub fn update(&mut self, stm: usize, hash: u64, bonus: i32) {
         let clamp = self.params.corrhist_clamp_mult * self.params.max_corrhist / 1024;
         update_history(
-            &mut self.history[stm][(hash as usize) & (CORRHIST_SIZE - 1)], 
+            &mut self.history[stm][(hash as usize) & (CORRHIST_SIZE - 1)],
             bonus.clamp(-clamp, clamp),
-            self.params.max_corrhist
+            self.params.max_corrhist,
         );
     }
 }
@@ -151,7 +189,11 @@ pub struct PawnHistory {
 }
 
 impl PawnHistory {
-    pub fn new(params: TuneableParams) -> Self {
+    pub fn new() -> Self {
+        Self::new_with_params(TuneableParams::default())
+    }
+
+    pub fn new_with_params(params: TuneableParams) -> Self {
         Self {
             history: Box::new([[[[0i16; 64]; 6]; PAWNHIST_SIZE]; 2]),
             params,
@@ -163,14 +205,23 @@ impl PawnHistory {
     }
 
     pub fn get(&self, stm: usize, pawn_hash: u64, to: Square, piece_type: Piece) -> i32 {
-        self.history[stm][(pawn_hash as usize) & (PAWNHIST_SIZE - 1)][piece_type as usize][to as usize] as i32
+        self.history[stm][(pawn_hash as usize) & (PAWNHIST_SIZE - 1)][piece_type as usize]
+            [to as usize] as i32
     }
 
-    pub fn update(&mut self, stm: usize, pawn_hash: u64, to: Square, piece_type: Piece, bonus: i32) {
+    pub fn update(
+        &mut self,
+        stm: usize,
+        pawn_hash: u64,
+        to: Square,
+        piece_type: Piece,
+        bonus: i32,
+    ) {
         update_history(
-            &mut self.history[stm][(pawn_hash as usize) & (PAWNHIST_SIZE - 1)][piece_type as usize][to as usize],
+            &mut self.history[stm][(pawn_hash as usize) & (PAWNHIST_SIZE - 1)][piece_type as usize]
+                [to as usize],
             bonus,
-            self.params.history_max
+            self.params.history_max,
         );
     }
 }

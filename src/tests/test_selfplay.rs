@@ -19,7 +19,9 @@ fn parses_selfplay_options_and_defaults() {
     .unwrap()
     .unwrap();
 
-    assert_eq!(config.positions, 100);
+    assert_eq!(config.positions, Some(100));
+    assert_eq!(config.start_index, 0);
+    assert_eq!(config.end_index, None);
     assert_eq!(config.nodes, 2_000);
     assert_eq!(config.threads, 3);
     assert_eq!(config.warmup_plies, 0);
@@ -30,6 +32,18 @@ fn parses_selfplay_options_and_defaults() {
 fn requires_a_positive_position_count() {
     assert!(parse_args(Vec::<OsString>::new()).is_err());
     assert!(parse_args([OsString::from("--positions"), OsString::from("0")]).is_err());
+}
+
+#[test]
+fn parses_a_half_open_index_range() {
+    let config =
+        parse_args(["--start-position", "100", "--end-position", "200"].map(OsString::from))
+            .unwrap()
+            .unwrap();
+
+    assert_eq!(config.positions, None);
+    assert_eq!(config.start_index, 100);
+    assert_eq!(config.end_index, Some(200));
 }
 
 #[test]
@@ -90,7 +104,9 @@ fn nnue_selfplay_produces_valid_bullet_records() {
     let config = SelfplayConfig {
         output: PathBuf::new(),
         openings: PathBuf::new(),
-        positions: 1,
+        positions: Some(1),
+        start_index: 0,
+        end_index: None,
         nodes: 100,
         threads: 1,
         hash_mb: 1,

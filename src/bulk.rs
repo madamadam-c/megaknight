@@ -400,7 +400,7 @@ fn spawn_worker(
     cancelled: Arc<AtomicBool>,
 ) -> thread::JoinHandle<()> {
     thread::spawn(move || {
-        let mut engine = Engine::new(crate::TuneableParams::default());
+        let mut engine = Engine::new();
         engine.set_hash_size_mb(hash_mb);
 
         while let Ok(item) = work_rx.recv() {

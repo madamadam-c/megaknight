@@ -9,18 +9,16 @@ use cozy_chess::{
 use crate::engine::EngineMove;
 
 const INPUT_SIZE: usize = 768;
-const HIDDEN_SIZE: usize = 64;
-const OUTPUT_INPUT_SIZE: usize = 2 * HIDDEN_SIZE;
 const QA: i32 = 255;
 const QB: i32 = 64;
 const EVAL_SCALE: i32 = 400;
-const NETWORK_PAYLOAD_SIZE: usize =
-    (INPUT_SIZE * HIDDEN_SIZE + HIDDEN_SIZE + OUTPUT_INPUT_SIZE + 1) * 2;
-const NETWORK_FILE_SIZE: usize = 98_752;
+const NETWORK_ALIGNMENT: usize = 64;
 
-const NETWORK_BYTES: &[u8; NETWORK_FILE_SIZE] = include_bytes!(
-    "../networks/31_08_26.bin"
-);
+const NETWORK_BYTES: &[u8] = include_bytes!("../networks/15_09_26.bin");
+const NETWORK_FILE_SIZE: usize = NETWORK_BYTES.len();
+const HIDDEN_SIZE: usize = hidden_size_for_file_size(NETWORK_FILE_SIZE);
+const OUTPUT_INPUT_SIZE: usize = 2 * HIDDEN_SIZE;
+const NETWORK_PAYLOAD_SIZE: usize = network_payload_size(HIDDEN_SIZE);
 const NETWORK: Network = Network::from_bytes(NETWORK_BYTES);
 
 #[derive(Clone, Copy)]
@@ -32,7 +30,7 @@ struct Network {
 }
 
 impl Network {
-    const fn from_bytes(bytes: &[u8; NETWORK_FILE_SIZE]) -> Self {
+    const fn from_bytes(bytes: &[u8]) -> Self {
         assert!(NETWORK_PAYLOAD_SIZE <= NETWORK_FILE_SIZE);
 
         let mut offset = 0;
@@ -93,8 +91,28 @@ impl Network {
     }
 }
 
-const fn read_i16(bytes: &[u8; NETWORK_FILE_SIZE], offset: usize) -> i16 {
+const fn read_i16(bytes: &[u8], offset: usize) -> i16 {
     i16::from_le_bytes([bytes[offset], bytes[offset + 1]])
+}
+
+const fn network_payload_size(hidden_size: usize) -> usize {
+    (INPUT_SIZE * hidden_size + hidden_size + 2 * hidden_size + 1) * 2
+}
+
+const fn padded_network_file_size(hidden_size: usize) -> usize {
+    let payload_size = network_payload_size(hidden_size);
+    (payload_size + NETWORK_ALIGNMENT - 1) / NETWORK_ALIGNMENT * NETWORK_ALIGNMENT
+}
+
+const fn hidden_size_for_file_size(file_size: usize) -> usize {
+    let mut hidden_size = 1;
+    while padded_network_file_size(hidden_size) <= file_size {
+        if padded_network_file_size(hidden_size) == file_size {
+            return hidden_size;
+        }
+        hidden_size += 1;
+    }
+    panic!("NNUE file size does not match a padded 768->N->N->1 network");
 }
 
 const fn output_abs_sum(weights: &[i16; OUTPUT_INPUT_SIZE]) -> i64 {

@@ -3,8 +3,8 @@ use std::{
     env,
     error::Error,
     ffi::OsString,
-    fs::{self, File, OpenOptions},
-    io::{BufRead, BufReader, BufWriter, Write},
+    fs::{self, OpenOptions},
+    io::{BufWriter, Write},
     path::{Path, PathBuf},
     sync::{
         Arc,
@@ -18,6 +18,7 @@ use cozy_chess::{Board, Color, GameStatus, Move, Piece};
 use crossbeam_channel::{RecvTimeoutError, Sender, bounded};
 
 use crate::engine::{Engine, SearchLimits, SearchRequest};
+use crate::genfens::{BookSampler, SplitMix64};
 
 type AnyError = Box<dyn Error + Send + Sync>;
 
@@ -34,12 +35,14 @@ const DEFAULT_WIN_PLIES: usize = 8;
 const MAX_BULLET_SCORE: i32 = 30_000;
 
 const USAGE: &str = "\
-Usage: chessbot selfplay --positions N [options]
+Usage: chessbot selfplay (--positions N | --start-index N --end-index N) [options]
 
 Options:
   --output PATH         Bullet text output (default: datagen/selfplay.txt)
   --openings PATH       Opening EPD file (default: UHO + noob 4-move dedup)
-  --positions N         Number of output positions (required)
+  --positions N         Number of output positions (normal mode)
+  --start-index N       First deterministic game index, inclusive
+  --end-index N         Last deterministic game index, exclusive
   --nodes N             Search nodes per move (default: 1000)
   --threads N           Parallel games (default: available CPUs)
   --hash-mb N           Hash size per worker (default: 4)
@@ -57,7 +60,9 @@ Options:
 struct SelfplayConfig {
     output: PathBuf,
     openings: PathBuf,
-    positions: u64,
+    positions: Option<u64>,
+    start_index: u64,
+    end_index: Option<u64>,
     nodes: u64,
     threads: usize,
     hash_mb: u64,
@@ -144,7 +149,9 @@ where
     let mut config = SelfplayConfig {
         output: PathBuf::from(DEFAULT_OUTPUT),
         openings: PathBuf::from(DEFAULT_OPENINGS),
-        positions: 0,
+        positions: None,
+        start_index: 0,
+        end_index: None,
         nodes: DEFAULT_NODES,
         threads: thread::available_parallelism().map_or(1, usize::from),
         hash_mb: DEFAULT_HASH_MB,
@@ -174,7 +181,20 @@ where
             "--output" => config.output = PathBuf::from(value(&mut args, "--output")?),
             "--openings" => config.openings = PathBuf::from(value(&mut args, "--openings")?),
             "--positions" => {
-                config.positions = parse_positive(&value(&mut args, "--positions")?, "--positions")?
+                config.positions = Some(parse_positive(
+                    &value(&mut args, "--positions")?,
+                    "--positions",
+                )?)
+            }
+            "--start-index" | "--start-position" => {
+                config.start_index =
+                    parse_nonnegative(&value(&mut args, "--start-index")?, "--start-index")?
+            }
+            "--end-index" | "--end-position" => {
+                config.end_index = Some(parse_nonnegative(
+                    &value(&mut args, "--end-index")?,
+                    "--end-index",
+                )?)
             }
             "--nodes" => config.nodes = parse_positive(&value(&mut args, "--nodes")?, "--nodes")?,
             "--threads" => {
@@ -210,10 +230,18 @@ where
         }
     }
 
-    if config.positions == 0 {
-        return Err(format!(
-            "--positions is required and must be positive\n\n{USAGE}"
-        ));
+    match (config.positions, config.end_index) {
+        (Some(positions), None) if positions > 0 => {}
+        (None, Some(end_index)) if config.start_index < end_index => {}
+        (Some(_), Some(_)) => {
+            return Err(format!(
+                "--positions cannot be combined with --start-index/--end-index\n\n{USAGE}"
+            ));
+        }
+        (None, None) => {
+            return Err(format!("provide --positions or an index range\n\n{USAGE}"));
+        }
+        _ => return Err(format!("invalid selfplay range\n\n{USAGE}")),
     }
     Ok(Some(config))
 }
@@ -241,9 +269,6 @@ where
 }
 
 fn run(config: SelfplayConfig) -> Result<(), AnyError> {
-    let mut openings = load_openings(&config.openings)?;
-    shuffle(&mut openings, config.seed);
-    let openings = Arc::new(openings);
     let partial = partial_path(&config.output);
     prepare_output(&config.output, &partial, config.overwrite)?;
     let output = OpenOptions::new()
@@ -253,33 +278,48 @@ fn run(config: SelfplayConfig) -> Result<(), AnyError> {
     let mut output = BufWriter::with_capacity(4 * 1024 * 1024, output);
 
     let cancelled = Arc::new(AtomicBool::new(false));
-    let next_game = Arc::new(AtomicU64::new(0));
+    let next_game = Arc::new(AtomicU64::new(config.start_index));
     let counters = Arc::new(Counters::default());
     let (event_tx, event_rx) = bounded::<Event>(config.threads * 2);
     let mut workers = Vec::with_capacity(config.threads);
 
     for worker_id in 0..config.threads {
         let config = config.clone();
-        let openings = Arc::clone(&openings);
         let event_tx = event_tx.clone();
         let cancelled = Arc::clone(&cancelled);
         let next_game = Arc::clone(&next_game);
         let counters = Arc::clone(&counters);
-        workers.push(thread::spawn(move || {
-            worker_loop(
-                worker_id, &config, &openings, &event_tx, &cancelled, &next_game, &counters,
-            )
-        }));
+        workers.push(
+            thread::Builder::new()
+                .name(format!("selfplay-{worker_id}"))
+                .stack_size(64 * 1024 * 1024)
+                .spawn(move || {
+                    worker_loop(
+                        worker_id, &config, &event_tx, &cancelled, &next_game, &counters,
+                    )
+                })?,
+        );
     }
     drop(event_tx);
 
-    eprintln!(
-        "selfplay: {} positions, {} nodes/move, {} threads, {} openings",
-        config.positions,
-        config.nodes,
-        config.threads,
-        openings.len()
-    );
+    if let Some(positions) = config.positions {
+        eprintln!(
+            "selfplay: {positions} positions, {} nodes/move, {} threads, openings {}",
+            config.nodes,
+            config.threads,
+            config.openings.display()
+        );
+    } else {
+        let end_index = config.end_index.expect("validated selfplay range");
+        eprintln!(
+            "selfplay: indexes [{}..{}), {} nodes/move, {} threads, openings {}",
+            config.start_index,
+            end_index,
+            config.nodes,
+            config.threads,
+            config.openings.display()
+        );
+    }
 
     let started = Instant::now();
     let mut written = 0u64;
@@ -288,7 +328,9 @@ fn run(config: SelfplayConfig) -> Result<(), AnyError> {
     while workers_done < config.threads {
         match event_rx.recv_timeout(Duration::from_secs(1)) {
             Ok(Event::Game(game)) => {
-                let remaining = (config.positions - written) as usize;
+                let remaining = config
+                    .positions
+                    .map_or(usize::MAX, |target| target.saturating_sub(written) as usize);
                 for position in game.positions.into_iter().take(remaining) {
                     writeln!(
                         output,
@@ -299,10 +341,12 @@ fn run(config: SelfplayConfig) -> Result<(), AnyError> {
                     )?;
                     written += 1;
                 }
-                if written == config.positions {
+                if config.positions.is_some_and(|target| written == target) {
                     cancelled.store(true, Ordering::Relaxed);
                 }
-                if written.is_multiple_of(1_000) || written == config.positions {
+                if written.is_multiple_of(1_000)
+                    || config.positions.is_some_and(|target| written == target)
+                {
                     print_progress(written, &config, &counters, started);
                 }
             }
@@ -325,12 +369,10 @@ fn run(config: SelfplayConfig) -> Result<(), AnyError> {
     if let Some(error) = first_error {
         return Err(error.into());
     }
-    if written != config.positions {
-        return Err(format!(
-            "expected {} positions but wrote {written}",
-            config.positions
-        )
-        .into());
+    if let Some(positions) = config.positions
+        && written != positions
+    {
+        return Err(format!("expected {positions} positions but wrote {written}").into());
     }
 
     drop(output);
@@ -345,48 +387,56 @@ fn run(config: SelfplayConfig) -> Result<(), AnyError> {
     Ok(())
 }
 
-fn load_openings(path: &Path) -> Result<Vec<Board>, AnyError> {
-    let file = BufReader::new(File::open(path)?);
-    let mut openings = Vec::new();
-    for line in file.lines() {
-        let line = line?;
-        let fields = line.split_whitespace().take(4).collect::<Vec<_>>();
-        if fields.len() != 4 {
-            continue;
-        }
-        let fen = format!("{} 0 1", fields.join(" "));
-        if let Ok(board) = Board::from_fen(&fen, false) {
-            openings.push(board);
-        }
-    }
-    if openings.is_empty() {
-        return Err(format!(
-            "opening file contained no valid positions: {}",
-            path.display()
-        )
-        .into());
-    }
-    Ok(openings)
-}
-
 fn worker_loop(
     worker_id: usize,
     config: &SelfplayConfig,
-    openings: &[Board],
     event_tx: &Sender<Event>,
     cancelled: &Arc<AtomicBool>,
     next_game: &AtomicU64,
     counters: &Counters,
 ) {
-    let mut engine = Engine::new(crate::TuneableParams::default());
+    let mut engine = Engine::new();
     engine.set_hash_size_mb(config.hash_mb);
+    let mut sampler = if config
+        .openings
+        .to_string_lossy()
+        .eq_ignore_ascii_case("none")
+    {
+        None
+    } else {
+        match BookSampler::open(&config.openings) {
+            Ok(sampler) => Some(sampler),
+            Err(error) => {
+                let _ = event_tx.send(Event::Error(error));
+                let _ = event_tx.send(Event::WorkerDone);
+                return;
+            }
+        }
+    };
 
     while !cancelled.load(Ordering::Relaxed) {
         let game_id = next_game.fetch_add(1, Ordering::Relaxed);
+        if config
+            .end_index
+            .is_some_and(|end_index| game_id >= end_index)
+        {
+            break;
+        }
         let mut rng = SplitMix64::new(config.seed ^ game_id.wrapping_mul(0x9e37_79b9_7f4a_7c15));
-        let opening_index = (game_id % openings.len() as u64) as usize;
-        let mut board = openings[opening_index].clone();
-        randomize_opening(&mut board, config.random_plies, &mut rng);
+        let board = match sampler.as_mut() {
+            Some(sampler) => match sampler.sample_board(&mut rng, config.random_plies) {
+                Ok(board) => board,
+                Err(error) => {
+                    let _ = event_tx.send(Event::Error(error));
+                    break;
+                }
+            },
+            None => {
+                let mut board = Board::default();
+                randomize_opening(&mut board, config.random_plies, &mut rng);
+                board
+            }
+        };
 
         match play_game(&mut engine, board, config, cancelled) {
             Some(game) => {
@@ -562,34 +612,10 @@ fn randomize_opening(board: &mut Board, plies: usize, rng: &mut SplitMix64) {
     }
 }
 
-fn shuffle<T>(values: &mut [T], seed: u64) {
-    let mut rng = SplitMix64::new(seed);
-    for end in (1..values.len()).rev() {
-        let index = rng.next_u64() as usize % (end + 1);
-        values.swap(end, index);
-    }
-}
-
 fn is_quiet_move(board: &Board, mv: Move) -> bool {
     mv.promotion.is_none()
         && board.color_on(mv.to).is_none()
         && !(board.piece_on(mv.from) == Some(Piece::Pawn) && mv.from.file() != mv.to.file())
-}
-
-struct SplitMix64(u64);
-
-impl SplitMix64 {
-    fn new(seed: u64) -> Self {
-        Self(seed)
-    }
-
-    fn next_u64(&mut self) -> u64 {
-        self.0 = self.0.wrapping_add(0x9e37_79b9_7f4a_7c15);
-        let mut value = self.0;
-        value = (value ^ (value >> 30)).wrapping_mul(0xbf58_476d_1ce4_e5b9);
-        value = (value ^ (value >> 27)).wrapping_mul(0x94d0_49bb_1331_11eb);
-        value ^ (value >> 31)
-    }
 }
 
 fn partial_path(output: &Path) -> PathBuf {
@@ -621,11 +647,24 @@ fn prepare_output(output: &Path, partial: &Path, overwrite: bool) -> Result<(), 
 fn print_progress(written: u64, config: &SelfplayConfig, counters: &Counters, started: Instant) {
     let elapsed = started.elapsed().as_secs_f64();
     let rate = written as f64 / elapsed.max(f64::EPSILON);
-    let remaining = config.positions.saturating_sub(written) as f64 / rate.max(f64::EPSILON);
+    let Some(target) = config.positions else {
+        eprint!(
+            "\rprocessed {} games | {:.1} pos/s | plies {} | W/D/L {}/{}/{}    ",
+            counters.games.load(Ordering::Relaxed),
+            rate,
+            counters.plies.load(Ordering::Relaxed),
+            counters.white_wins.load(Ordering::Relaxed),
+            counters.draws.load(Ordering::Relaxed),
+            counters.black_wins.load(Ordering::Relaxed),
+        );
+        let _ = std::io::stderr().flush();
+        return;
+    };
+    let remaining = target.saturating_sub(written) as f64 / rate.max(f64::EPSILON);
     eprint!(
         "\rwrote {written}/{} ({:.1}%) | {:.1} pos/s | ETA {} | games {} | plies {} | W/D/L {}/{}/{} | term C/R/3/M/A {}/{}/{}/{}/{}    ",
-        config.positions,
-        written as f64 * 100.0 / config.positions as f64,
+        target,
+        written as f64 * 100.0 / target as f64,
         rate,
         format_duration(remaining),
         counters.games.load(Ordering::Relaxed),
