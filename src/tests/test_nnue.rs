@@ -34,6 +34,7 @@ fn hidden_size_is_inferred_from_padded_file_size() {
     assert_eq!(hidden_size_for_file_size(24_704), 16);
     assert_eq!(hidden_size_for_file_size(98_752), 64);
     assert_eq!(hidden_size_for_file_size(197_440), 128);
+    assert_eq!(hidden_size_for_file_size(789_568), 512);
     assert_eq!(HIDDEN_SIZE, hidden_size_for_file_size(NETWORK_FILE_SIZE));
 }
 

@@ -87,7 +87,7 @@ impl Network {
 
         output /= QA;
         output += i32::from(self.output_bias);
-        output * EVAL_SCALE / (QA * QB)
+        (i64::from(output) * i64::from(EVAL_SCALE) / i64::from(QA * QB)) as i32
     }
 }
 
@@ -129,7 +129,7 @@ const OUTPUT_RAW_BOUND: i64 = output_abs_sum(&NETWORK.output_weights) * QA as i6
 const OUTPUT_SCALED_BOUND: i64 =
     (OUTPUT_RAW_BOUND / QA as i64 + NETWORK.output_bias.unsigned_abs() as i64) * EVAL_SCALE as i64;
 const _: () = assert!(OUTPUT_RAW_BOUND <= i32::MAX as i64);
-const _: () = assert!(OUTPUT_SCALED_BOUND <= i32::MAX as i64);
+const _: () = assert!(OUTPUT_SCALED_BOUND / (QA * QB) as i64 <= i32::MAX as i64);
 
 #[repr(align(32))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
