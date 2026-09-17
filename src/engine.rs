@@ -792,8 +792,8 @@ impl Engine {
             }
             let mut next_board = board.clone();
             let previous_nnue = self.nnue;
-            self.nnue.play_move(board.side_to_move(), &mv);
             next_board.play_unchecked(mv.mv);
+            self.nnue.play_move(&next_board, board.side_to_move(), &mv);
 
             context.history.push(next_board.hash());
             self.move_stack.push(StackMove {
@@ -837,8 +837,8 @@ impl Engine {
     ) -> Option<i32> {
         let mut next_board = board.clone();
         let previous_nnue = self.nnue;
-        self.nnue.play_move(board.side_to_move(), &mv);
         next_board.play_unchecked(mv.mv);
+        self.nnue.play_move(&next_board, board.side_to_move(), &mv);
 
         context.history.push(next_board.hash());
         self.move_stack.push(StackMove {

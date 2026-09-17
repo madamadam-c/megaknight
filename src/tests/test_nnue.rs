@@ -8,8 +8,9 @@ fn assert_incremental_move(fen: &str, move_text: &str) {
     let engine_move = EngineMove::new(&board, mv, piece, false);
     let mut incremental = NnueState::from_board(&board);
 
-    incremental.play_move(board.side_to_move(), &engine_move);
+    let side_to_move = board.side_to_move();
     board.play_unchecked(mv);
+    incremental.play_move(&board, side_to_move, &engine_move);
 
     let rebuilt = NnueState::from_board(&board);
     assert_eq!(incremental, rebuilt);
@@ -20,10 +21,10 @@ fn assert_incremental_move(fen: &str, move_text: &str) {
 }
 
 #[test]
-fn state_is_two_cache_line_sized_accumulators() {
+fn state_stores_two_accumulators_and_their_orientation() {
     assert_eq!(
         std::mem::size_of::<NnueState>(),
-        2 * std::mem::size_of::<Accumulator>()
+        2 * std::mem::size_of::<Accumulator>() + std::mem::align_of::<Accumulator>()
     );
     assert_eq!(std::mem::align_of::<NnueState>(), 32);
 }
@@ -38,10 +39,12 @@ fn hidden_size_is_inferred_from_padded_file_size() {
 
 #[test]
 fn chess768_features_match_bullet_perspectives() {
-    assert_eq!(feature_index(White, White, Pawn, Square::A2), 8);
-    assert_eq!(feature_index(White, Black, Pawn, Square::A7), 432);
-    assert_eq!(feature_index(Black, Black, Pawn, Square::A7), 8);
-    assert_eq!(feature_index(Black, White, Pawn, Square::A2), 432);
+    assert_eq!(feature_index(White, White, Pawn, Square::A2, 0), 8);
+    assert_eq!(feature_index(White, White, Pawn, Square::A2, 7), 15);
+    assert_eq!(feature_index(White, Black, Pawn, Square::A7, 7), 439);
+    assert_eq!(feature_index(Black, Black, Pawn, Square::A7, 56), 8);
+    assert_eq!(feature_index(Black, Black, Pawn, Square::A7, 63), 15);
+    assert_eq!(feature_index(Black, White, Pawn, Square::A2, 63), 439);
 }
 
 #[test]
@@ -75,6 +78,14 @@ fn incrementally_updates_castling() {
 }
 
 #[test]
+fn refreshes_only_when_a_king_crosses_the_de_boundary() {
+    assert_incremental_move("7k/8/8/8/8/3K4/8/8 w - - 0 1", "d3e3");
+    assert_incremental_move("8/8/3k4/8/8/8/8/K7 b - - 0 1", "d6e6");
+    assert_incremental_move("7k/8/8/8/8/4K3/8/8 w - - 0 1", "e3d3");
+    assert_incremental_move("8/8/4k3/8/8/8/8/K7 b - - 0 1", "e6d6");
+}
+
+#[test]
 fn incremental_state_matches_recomputation_for_a_move_sequence() {
     let mut board = Board::default();
     let mut state = NnueState::from_board(&board);
@@ -86,8 +97,9 @@ fn incremental_state_matches_recomputation_for_a_move_sequence() {
         let mv = parse_uci_move(&board, move_text).unwrap();
         let piece = board.piece_on(mv.from).unwrap();
         let engine_move = EngineMove::new(&board, mv, piece, false);
-        state.play_move(board.side_to_move(), &engine_move);
+        let side_to_move = board.side_to_move();
         board.play_unchecked(mv);
+        state.play_move(&board, side_to_move, &engine_move);
         assert_eq!(state, NnueState::from_board(&board), "after {move_text}");
     }
 }

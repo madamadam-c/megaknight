@@ -14,7 +14,7 @@ const QB: i32 = 64;
 const EVAL_SCALE: i32 = 400;
 const NETWORK_ALIGNMENT: usize = 64;
 
-const NETWORK_BYTES: &[u8] = include_bytes!("../networks/15_09_26.bin");
+const NETWORK_BYTES: &[u8] = include_bytes!("../networks/17_09_26.bin");
 const NETWORK_FILE_SIZE: usize = NETWORK_BYTES.len();
 const HIDDEN_SIZE: usize = hidden_size_for_file_size(NETWORK_FILE_SIZE);
 const OUTPUT_INPUT_SIZE: usize = 2 * HIDDEN_SIZE;
@@ -158,6 +158,7 @@ impl Accumulator {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct NnueState {
     accumulators: [Accumulator; 2],
+    square_xors: [u8; 2],
 }
 
 impl Default for NnueState {
@@ -167,6 +168,7 @@ impl Default for NnueState {
         };
         Self {
             accumulators: [accumulator; 2],
+            square_xors: [0, 56],
         }
     }
 }
@@ -174,6 +176,7 @@ impl Default for NnueState {
 impl NnueState {
     pub fn from_board(board: &Board) -> Self {
         let mut state = Self::default();
+        state.square_xors = [perspective_xor(board, White), perspective_xor(board, Black)];
         for piece in Piece::ALL {
             for color in [White, Black] {
                 for square in board.colored_pieces(color, piece) {
@@ -193,24 +196,31 @@ impl NnueState {
     }
 
     #[inline(always)]
-    pub fn play_move(&mut self, color: Color, mv: &EngineMove) {
+    pub fn play_move(&mut self, board_after: &Board, color: Color, mv: &EngineMove) {
         if mv.is_castle {
             self.play_castle(color, mv);
-            return;
+        } else {
+            self.remove_piece(color, mv.piece_type, mv.mv.from);
+
+            if let Some(victim) = mv.target_type {
+                let victim_square = if mv.is_ep {
+                    Square::new(mv.mv.to.file(), Rank::Fifth.relative_to(color))
+                } else {
+                    mv.mv.to
+                };
+                self.remove_piece(!color, victim, victim_square);
+            }
+
+            self.add_piece(color, mv.mv.promotion.unwrap_or(mv.piece_type), mv.mv.to);
         }
 
-        self.remove_piece(color, mv.piece_type, mv.mv.from);
-
-        if let Some(victim) = mv.target_type {
-            let victim_square = if mv.is_ep {
-                Square::new(mv.mv.to.file(), Rank::Fifth.relative_to(color))
-            } else {
-                mv.mv.to
-            };
-            self.remove_piece(!color, victim, victim_square);
+        if mv.piece_type == King {
+            let perspective = color_index(color);
+            let new_xor = perspective_xor(board_after, color);
+            if self.square_xors[perspective] != new_xor {
+                self.rebuild_accumulator(board_after, color, new_xor);
+            }
         }
-
-        self.add_piece(color, mv.mv.promotion.unwrap_or(mv.piece_type), mv.mv.to);
     }
 
     #[inline(always)]
@@ -231,16 +241,33 @@ impl NnueState {
     #[inline(always)]
     fn add_piece(&mut self, color: Color, piece: Piece, square: Square) {
         for perspective in [White, Black] {
-            let feature = feature_index(perspective, color, piece, square);
-            self.accumulators[color_index(perspective)].add(feature);
+            let index = color_index(perspective);
+            let feature = feature_index(perspective, color, piece, square, self.square_xors[index]);
+            self.accumulators[index].add(feature);
         }
     }
 
     #[inline(always)]
     fn remove_piece(&mut self, color: Color, piece: Piece, square: Square) {
         for perspective in [White, Black] {
-            let feature = feature_index(perspective, color, piece, square);
-            self.accumulators[color_index(perspective)].remove(feature);
+            let index = color_index(perspective);
+            let feature = feature_index(perspective, color, piece, square, self.square_xors[index]);
+            self.accumulators[index].remove(feature);
+        }
+    }
+
+    fn rebuild_accumulator(&mut self, board: &Board, perspective: Color, square_xor: u8) {
+        let index = color_index(perspective);
+        self.square_xors[index] = square_xor;
+        self.accumulators[index].values = NETWORK.feature_bias;
+
+        for piece in Piece::ALL {
+            for color in [White, Black] {
+                for square in board.colored_pieces(color, piece) {
+                    let feature = feature_index(perspective, color, piece, square, square_xor);
+                    self.accumulators[index].add(feature);
+                }
+            }
         }
     }
 }
@@ -254,17 +281,31 @@ const fn color_index(color: Color) -> usize {
 }
 
 #[inline(always)]
-const fn feature_index(perspective: Color, color: Color, piece: Piece, square: Square) -> usize {
+fn perspective_xor(board: &Board, perspective: Color) -> u8 {
+    let king = board
+        .colored_pieces(perspective, King)
+        .into_iter()
+        .next()
+        .expect("position must contain both kings");
+    let rank_xor = if perspective == Black { 56 } else { 0 };
+    let file_xor = if king.file() >= File::E { 7 } else { 0 };
+    rank_xor ^ file_xor
+}
+
+#[inline(always)]
+const fn feature_index(
+    perspective: Color,
+    color: Color,
+    piece: Piece,
+    square: Square,
+    square_xor: u8,
+) -> usize {
     let color_offset = if color_index(perspective) == color_index(color) {
         0
     } else {
         384
     };
-    let square = if color_index(perspective) == color_index(White) {
-        square as usize
-    } else {
-        square as usize ^ 56
-    };
+    let square = square as usize ^ square_xor as usize;
     color_offset + piece as usize * 64 + square
 }
 
