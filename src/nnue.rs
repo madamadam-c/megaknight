@@ -21,6 +21,7 @@ const OUTPUT_INPUT_SIZE: usize = 2 * HIDDEN_SIZE;
 const NETWORK_PAYLOAD_SIZE: usize = network_payload_size(HIDDEN_SIZE);
 const NETWORK: Network = Network::from_bytes(NETWORK_BYTES);
 
+#[repr(C, align(64))]
 #[derive(Clone, Copy)]
 struct Network {
     feature_weights: [[i16; HIDDEN_SIZE]; INPUT_SIZE],
