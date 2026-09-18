@@ -1,5 +1,6 @@
 EXE ?= megaknight
 CARGO ?= cargo
+RUSTFLAGS ?= -C target-cpu=native
 
 .PHONY: all clean
 
