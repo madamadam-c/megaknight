@@ -1,4 +1,4 @@
-use std::arch::x86_64::{__m256i, _mm256_add_epi16, _mm256_add_epi32, _mm256_and_si256, _mm256_cmpgt_epi16, _mm256_loadu_si256, _mm256_madd_epi16, _mm256_max_epi16, _mm256_min_epi16, _mm256_mullo_epi16, _mm256_set1_epi16, _mm256_setzero_si256, _mm256_slli_epi32, _mm256_storeu_si256, _mm256_sub_epi16};
+use std::arch::x86_64::{__m256i, _mm256_add_epi32, _mm256_and_si256, _mm256_cmpgt_epi16, _mm256_loadu_si256, _mm256_madd_epi16, _mm256_max_epi16, _mm256_min_epi16, _mm256_mullo_epi16, _mm256_set1_epi16, _mm256_setzero_si256, _mm256_slli_epi32, _mm256_storeu_si256};
 
 use cozy_chess::{
     Board,
