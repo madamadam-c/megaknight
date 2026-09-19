@@ -1,4 +1,4 @@
-use std::arch::x86_64::{__m256i, _mm256_add_epi32, _mm256_and_si256, _mm256_cmpgt_epi16, _mm256_loadu_si256, _mm256_madd_epi16, _mm256_max_epi16, _mm256_min_epi16, _mm256_mullo_epi16, _mm256_set1_epi16, _mm256_setzero_si256, _mm256_slli_epi32, _mm256_storeu_si256};
+use std::arch::x86_64::{__m256i, _mm256_add_epi16, _mm256_add_epi32, _mm256_and_si256, _mm256_cmpgt_epi16, _mm256_loadu_si256, _mm256_madd_epi16, _mm256_max_epi16, _mm256_min_epi16, _mm256_mullo_epi16, _mm256_set1_epi16, _mm256_setzero_si256, _mm256_slli_epi32, _mm256_storeu_si256, _mm256_sub_epi16};
 
 use cozy_chess::{
     Board,
@@ -8,7 +8,7 @@ use cozy_chess::{
     Rank, Square,
 };
 
-use crate::engine::EngineMove;
+use crate::engine::{EngineMove, FLAG_CASTLE, FLAG_EN_PASSANT};
 
 const INPUT_SIZE: usize = 768;
 const QA: i32 = 255;
@@ -197,6 +197,7 @@ const OUTPUT_SCALED_BOUND: i64 =
     (OUTPUT_RAW_BOUND / QA as i64 + NETWORK.output_bias.unsigned_abs() as i64) * EVAL_SCALE as i64;
 const _: () = assert!(OUTPUT_RAW_BOUND <= i32::MAX as i64);
 const _: () = assert!(OUTPUT_SCALED_BOUND / (QA * QB) as i64 <= i32::MAX as i64);
+const _: () = assert!(HIDDEN_SIZE % 16 == 0);
 
 #[repr(align(32))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -213,13 +214,6 @@ impl Accumulator {
         }
     }
 
-    #[inline(always)]
-    fn remove(&mut self, feature: usize) {
-        for hidden in 0..HIDDEN_SIZE {
-            self.values[hidden] =
-                self.values[hidden].wrapping_sub(NETWORK.feature_weights[feature][hidden]);
-        }
-    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -241,6 +235,163 @@ impl Default for NnueState {
 }
 
 impl NnueState {
+    #[inline(always)]
+    fn replace_features(&mut self, removed: [usize; 2], added: [usize; 2]) {
+        unsafe { self.replace_features_avx2(removed, added) }
+    }
+
+    #[target_feature(enable = "avx2")]
+    unsafe fn replace_features_avx2(&mut self, removed: [usize; 2], added: [usize; 2]) {
+        for perspective in 0..2 {
+            let mut hidden = 0;
+            while hidden < HIDDEN_SIZE {
+                let accumulator = unsafe {
+                    _mm256_loadu_si256(
+                        self.accumulators[perspective].values.as_ptr().add(hidden).cast(),
+                    )
+                };
+                let removed = unsafe {
+                    _mm256_loadu_si256(
+                        NETWORK.feature_weights[removed[perspective]].as_ptr().add(hidden).cast(),
+                    )
+                };
+                let added = unsafe {
+                    _mm256_loadu_si256(
+                        NETWORK.feature_weights[added[perspective]].as_ptr().add(hidden).cast(),
+                    )
+                };
+                let accumulator = _mm256_add_epi16(_mm256_sub_epi16(accumulator, removed), added);
+                unsafe {
+                    _mm256_storeu_si256(
+                        self.accumulators[perspective].values.as_mut_ptr().add(hidden).cast(),
+                        accumulator,
+                    )
+                };
+                hidden += 16;
+            }
+        }
+    }
+
+    #[inline(always)]
+    fn capture_features(
+        &mut self,
+        moved: [usize; 2],
+        captured: [usize; 2],
+        added: [usize; 2],
+    ) {
+        unsafe { self.capture_features_avx2(moved, captured, added) }
+    }
+
+    #[target_feature(enable = "avx2")]
+    unsafe fn capture_features_avx2(
+        &mut self,
+        moved: [usize; 2],
+        captured: [usize; 2],
+        added: [usize; 2],
+    ) {
+        for perspective in 0..2 {
+            let mut hidden = 0;
+            while hidden < HIDDEN_SIZE {
+                let accumulator = unsafe {
+                    _mm256_loadu_si256(
+                        self.accumulators[perspective].values.as_ptr().add(hidden).cast(),
+                    )
+                };
+                let moved = unsafe {
+                    _mm256_loadu_si256(
+                        NETWORK.feature_weights[moved[perspective]].as_ptr().add(hidden).cast(),
+                    )
+                };
+                let captured = unsafe {
+                    _mm256_loadu_si256(
+                        NETWORK.feature_weights[captured[perspective]].as_ptr().add(hidden).cast(),
+                    )
+                };
+                let added = unsafe {
+                    _mm256_loadu_si256(
+                        NETWORK.feature_weights[added[perspective]].as_ptr().add(hidden).cast(),
+                    )
+                };
+                let accumulator = _mm256_add_epi16(
+                    _mm256_sub_epi16(_mm256_sub_epi16(accumulator, moved), captured),
+                    added,
+                );
+                unsafe {
+                    _mm256_storeu_si256(
+                        self.accumulators[perspective].values.as_mut_ptr().add(hidden).cast(),
+                        accumulator,
+                    )
+                };
+                hidden += 16;
+            }
+        }
+    }
+
+    #[inline(always)]
+    fn castle_features(
+        &mut self,
+        old_king: [usize; 2],
+        old_rook: [usize; 2],
+        new_king: [usize; 2],
+        new_rook: [usize; 2],
+    ) {
+        unsafe { self.castle_features_avx2(old_king, old_rook, new_king, new_rook) }
+    }
+
+    #[target_feature(enable = "avx2")]
+    unsafe fn castle_features_avx2(
+        &mut self,
+        old_king: [usize; 2],
+        old_rook: [usize; 2],
+        new_king: [usize; 2],
+        new_rook: [usize; 2],
+    ) {
+        for perspective in 0..2 {
+            let mut hidden = 0;
+            while hidden < HIDDEN_SIZE {
+                let accumulator = unsafe {
+                    _mm256_loadu_si256(
+                        self.accumulators[perspective].values.as_ptr().add(hidden).cast(),
+                    )
+                };
+                let old_king = unsafe {
+                    _mm256_loadu_si256(
+                        NETWORK.feature_weights[old_king[perspective]].as_ptr().add(hidden).cast(),
+                    )
+                };
+                let old_rook = unsafe {
+                    _mm256_loadu_si256(
+                        NETWORK.feature_weights[old_rook[perspective]].as_ptr().add(hidden).cast(),
+                    )
+                };
+                let new_king = unsafe {
+                    _mm256_loadu_si256(
+                        NETWORK.feature_weights[new_king[perspective]].as_ptr().add(hidden).cast(),
+                    )
+                };
+                let new_rook = unsafe {
+                    _mm256_loadu_si256(
+                        NETWORK.feature_weights[new_rook[perspective]].as_ptr().add(hidden).cast(),
+                    )
+                };
+                let accumulator = _mm256_add_epi16(
+                    _mm256_add_epi16(
+                        _mm256_sub_epi16(_mm256_sub_epi16(accumulator, old_king), old_rook),
+                        new_king,
+                    ),
+                    new_rook,
+                );
+                unsafe {
+                    _mm256_storeu_si256(
+                        self.accumulators[perspective].values.as_mut_ptr().add(hidden).cast(),
+                        accumulator,
+                    )
+                };
+                hidden += 16;
+            }
+        }
+    }
+
     pub fn from_board(board: &Board) -> Self {
         let mut state = Self::default();
         state.square_xors = [perspective_xor(board, White), perspective_xor(board, Black)];
@@ -264,21 +415,44 @@ impl NnueState {
 
     #[inline(always)]
     pub fn play_move(&mut self, board_after: &Board, color: Color, mv: &EngineMove) {
-        if mv.is_castle {
+        if mv.flags & FLAG_CASTLE != 0 {
             self.play_castle(color, mv);
         } else {
-            self.remove_piece(color, mv.piece_type, mv.mv.from);
-
-            if let Some(victim) = mv.target_type {
-                let victim_square = if mv.is_ep {
+            let added_piece = mv.mv.promotion.unwrap_or(mv.piece_type);
+            let victim = mv.target_type.map(|piece| {
+                let square = if mv.flags & FLAG_EN_PASSANT != 0 {
                     Square::new(mv.mv.to.file(), Rank::Fifth.relative_to(color))
                 } else {
                     mv.mv.to
                 };
-                self.remove_piece(!color, victim, victim_square);
-            }
+                (piece, square)
+            });
 
-            self.add_piece(color, mv.mv.promotion.unwrap_or(mv.piece_type), mv.mv.to);
+            let mut moved = [0; 2];
+            let mut added = [0; 2];
+            let mut captured = [0; 2];
+            for perspective in [White, Black] {
+                let index = color_index(perspective);
+                let square_xor = self.square_xors[index];
+                moved[index] = feature_index(
+                    perspective,
+                    color,
+                    mv.piece_type,
+                    mv.mv.from,
+                    square_xor,
+                );
+                added[index] =
+                    feature_index(perspective, color, added_piece, mv.mv.to, square_xor);
+                if let Some((victim, square)) = victim {
+                    captured[index] =
+                        feature_index(perspective, !color, victim, square, square_xor);
+                }
+            }
+            if victim.is_some() {
+                self.capture_features(moved, captured, added);
+            } else {
+                self.replace_features(moved, added);
+            }
         }
 
         if mv.piece_type == King {
@@ -299,10 +473,21 @@ impl NnueState {
             (File::C, File::D)
         };
 
-        self.remove_piece(color, King, mv.mv.from);
-        self.remove_piece(color, Rook, mv.mv.to);
-        self.add_piece(color, King, Square::new(king_file, back_rank));
-        self.add_piece(color, Rook, Square::new(rook_file, back_rank));
+        let king_square = Square::new(king_file, back_rank);
+        let rook_square = Square::new(rook_file, back_rank);
+        let mut old_king = [0; 2];
+        let mut old_rook = [0; 2];
+        let mut new_king = [0; 2];
+        let mut new_rook = [0; 2];
+        for perspective in [White, Black] {
+            let index = color_index(perspective);
+            let square_xor = self.square_xors[index];
+            old_king[index] = feature_index(perspective, color, King, mv.mv.from, square_xor);
+            old_rook[index] = feature_index(perspective, color, Rook, mv.mv.to, square_xor);
+            new_king[index] = feature_index(perspective, color, King, king_square, square_xor);
+            new_rook[index] = feature_index(perspective, color, Rook, rook_square, square_xor);
+        }
+        self.castle_features(old_king, old_rook, new_king, new_rook);
     }
 
     #[inline(always)]
@@ -311,15 +496,6 @@ impl NnueState {
             let index = color_index(perspective);
             let feature = feature_index(perspective, color, piece, square, self.square_xors[index]);
             self.accumulators[index].add(feature);
-        }
-    }
-
-    #[inline(always)]
-    fn remove_piece(&mut self, color: Color, piece: Piece, square: Square) {
-        for perspective in [White, Black] {
-            let index = color_index(perspective);
-            let feature = feature_index(perspective, color, piece, square, self.square_xors[index]);
-            self.accumulators[index].remove(feature);
         }
     }
 

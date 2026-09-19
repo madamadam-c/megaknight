@@ -8,7 +8,7 @@ use cozy_chess::{
     get_pawn_attacks, get_rook_moves,
 };
 
-use crate::engine::EngineMove;
+use crate::engine::{EngineMove, FLAG_CAPTURE, FLAG_EN_PASSANT, FLAG_PROMOTION};
 
 pub fn value(piece: Piece) -> i32 {
     match piece {
@@ -35,11 +35,11 @@ pub fn static_exchange_evaluation(board: &Board, mv: &EngineMove) -> i16 {
     let mut blocked_squares = board.occupied();
     blocked_squares ^= mv.mv.from.bitboard();
 
-    if !mv.is_capture {
+    if mv.flags & FLAG_CAPTURE == 0 {
         blocked_squares ^= mv.mv.to.bitboard();
     }
 
-    if mv.is_ep {
+    if mv.flags & FLAG_EN_PASSANT != 0 {
         if colour == White {
             blocked_squares ^= Square::new(square.file(), Rank::Fourth).bitboard();
         } else {
@@ -62,7 +62,7 @@ pub fn static_exchange_evaluation(board: &Board, mv: &EngineMove) -> i16 {
     let mut d = 0;
 
     gain[0] = mv.material_value;
-    piece = if mv.promotion {
+    piece = if mv.flags & FLAG_PROMOTION != 0 {
         mv.mv.promotion
     } else {
         Some(mv.piece_type)
