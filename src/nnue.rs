@@ -1,3 +1,5 @@
+use std::arch::x86_64::{__m256i, _mm256_add_epi32, _mm256_and_si256, _mm256_cmpgt_epi16, _mm256_loadu_si256, _mm256_madd_epi16, _mm256_max_epi16, _mm256_min_epi16, _mm256_mullo_epi16, _mm256_set1_epi16, _mm256_setzero_si256, _mm256_slli_epi32, _mm256_storeu_si256};
+
 use cozy_chess::{
     Board,
     Color::{self, Black, White},
@@ -21,6 +23,7 @@ const OUTPUT_INPUT_SIZE: usize = 2 * HIDDEN_SIZE;
 const NETWORK_PAYLOAD_SIZE: usize = network_payload_size(HIDDEN_SIZE);
 const NETWORK: Network = Network::from_bytes(NETWORK_BYTES);
 
+#[repr(C, align(64))]
 #[derive(Clone, Copy)]
 struct Network {
     feature_weights: [[i16; HIDDEN_SIZE]; INPUT_SIZE],
@@ -76,6 +79,70 @@ impl Network {
 
     #[inline(always)]
     fn evaluate(&self, us: &Accumulator, them: &Accumulator) -> i32 {
+        if is_x86_feature_detected!("avx2") {
+            unsafe {return self.avx2_evaluate(us, them);}
+        } else {
+            return self.save_evaluate(us, them);
+        }
+    }
+
+    /*
+    simd is weird
+    */
+
+    #[target_feature(enable = "avx2")]
+    unsafe fn avx2_evaluate(&self, us: &Accumulator, them: &Accumulator) -> i32 {
+        let lower = _mm256_setzero_si256();
+        let upper = _mm256_set1_epi16(QA as i16);
+
+        let mut output_store = _mm256_setzero_si256();
+
+        let mut idx = 0;
+        while idx < HIDDEN_SIZE {
+            let mut us_chunk   = unsafe {_mm256_loadu_si256(us.values.as_ptr().add(idx) as *const __m256i)};
+            let mut them_chunk = unsafe {_mm256_loadu_si256(them.values.as_ptr().add(idx) as *const __m256i)};
+            
+            // clamp
+            us_chunk   = _mm256_max_epi16(_mm256_min_epi16(us_chunk, upper), lower);
+            them_chunk = _mm256_max_epi16(_mm256_min_epi16(them_chunk, upper), lower);
+
+            // store the clamped values for later
+            let us_clamp   = us_chunk;
+            let them_clamp = them_chunk;
+
+            // load weights
+            let us_weights   = unsafe {_mm256_loadu_si256(self.output_weights.as_ptr().add(idx) as *const __m256i)};
+            let them_weights = unsafe {_mm256_loadu_si256(self.output_weights.as_ptr().add(idx+HIDDEN_SIZE) as *const __m256i)};
+
+            // this instruction multiplies by the weights, and turns it from 16x i16s into 8x i32s by adding adjacent pairs
+            // eg. [a,b] x [c,d] = [a*c+b*d]
+            us_chunk   = _mm256_mullo_epi16(us_chunk, us_weights);
+            them_chunk = _mm256_mullo_epi16(them_chunk, them_weights);
+
+            // square
+            us_chunk   = _mm256_madd_epi16(us_chunk, us_clamp);
+            them_chunk = _mm256_madd_epi16(them_chunk, them_clamp);
+
+            // add to the output buffer
+            output_store = _mm256_add_epi32(output_store, us_chunk);
+            output_store = _mm256_add_epi32(output_store, them_chunk);
+
+            idx += 16;
+        }
+
+        let mut values = [0i32; 8];
+        unsafe {_mm256_storeu_si256(values.as_mut_ptr().cast::<__m256i>(), output_store) };
+
+        let mut output: i32 = values.into_iter().sum();
+
+        output /= QA;
+        output += i32::from(self.output_bias);
+
+        return (i64::from(output) * i64::from(EVAL_SCALE) / i64::from(QA * QB)) as i32;
+    }
+
+    #[inline(always)]
+    fn save_evaluate(&self, us: &Accumulator, them: &Accumulator) -> i32 {
         let mut output = 0;
         for hidden in 0..HIDDEN_SIZE {
             let us_value = i32::from(us.values[hidden]).clamp(0, QA);
