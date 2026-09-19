@@ -1,4 +1,4 @@
-use std::arch::x86_64::{_mm256_add_epi16, _mm256_add_epi32, _mm256_loadu_si256, _mm256_madd_epi16, _mm256_max_epi16, _mm256_min_epi16, _mm256_mullo_epi16, _mm256_set1_epi16, _mm256_setzero_si256, _mm256_storeu_si256, _mm256_sub_epi16};
+use std::arch::x86_64::{_mm256_add_epi16, _mm256_add_epi32, _mm256_castsi256_si128, _mm256_extracti128_si256, _mm256_loadu_si256, _mm256_madd_epi16, _mm256_max_epi16, _mm256_min_epi16, _mm256_mullo_epi16, _mm256_set1_epi16, _mm256_setzero_si256, _mm256_storeu_si256, _mm256_sub_epi16, _mm_add_epi32, _mm_cvtsi128_si32, _mm_hadd_epi32};
 
 use cozy_chess::{
     Board,
@@ -16,12 +16,15 @@ const QB: i32 = 64;
 const EVAL_SCALE: i32 = 400;
 const NETWORK_ALIGNMENT: usize = 64;
 
-const NETWORK_BYTES: &[u8] = include_bytes!("../networks/19_09_26.bin");
+const NETWORK_BYTES: &[u8] = include_bytes!("../networks/19_09_26-2.bin");
 const NETWORK_FILE_SIZE: usize = NETWORK_BYTES.len();
 const HIDDEN_SIZE: usize = 128;
-const L2_SIZE: usize = 16;
+const L1_SIZE: usize = 16;
+const L2_SIZE: usize = 32;
 const OUTPUT_INPUT_SIZE: usize = L2_SIZE;
-const NETWORK_PAYLOAD_SIZE: usize = 205_122;
+const NETWORK_PAYLOAD_SIZE: usize = 206_242;
+const PADDED_NETWORK_SIZE: usize =
+    (NETWORK_PAYLOAD_SIZE + NETWORK_ALIGNMENT - 1) / NETWORK_ALIGNMENT * NETWORK_ALIGNMENT;
 const NETWORK: Network = Network::from_bytes(NETWORK_BYTES);
 
 #[repr(C, align(64))]
@@ -29,15 +32,17 @@ const NETWORK: Network = Network::from_bytes(NETWORK_BYTES);
 struct Network {
     feature_weights: [[i16; HIDDEN_SIZE]; INPUT_SIZE],
     feature_bias: [i16; HIDDEN_SIZE],
-    l1_weights: [[i16; 2*HIDDEN_SIZE]; L2_SIZE],
-    l1_bias: [i16; 16],
+    l1_weights: [[i16; 2*HIDDEN_SIZE]; L1_SIZE],
+    l1_bias: [i16; L1_SIZE],
+    l2_weights: [[i16; L1_SIZE]; L2_SIZE],
+    l2_bias: [i16; L2_SIZE],
     output_weights: [i16; L2_SIZE],
     output_bias: i16,
 }
 
 impl Network {
     const fn from_bytes(bytes: &[u8]) -> Self {
-        assert!(NETWORK_PAYLOAD_SIZE <= NETWORK_FILE_SIZE);
+        assert!(NETWORK_FILE_SIZE == PADDED_NETWORK_SIZE);
 
         let mut offset = 0;
         let mut feature_weights = [[0; HIDDEN_SIZE]; INPUT_SIZE];
@@ -60,10 +65,10 @@ impl Network {
             hidden += 1;
         }
 
-        let mut l1_weights = [[0; 2*HIDDEN_SIZE]; L2_SIZE];
+        let mut l1_weights = [[0; 2*HIDDEN_SIZE]; L1_SIZE];
         let mut i = 0;
 
-        while i < L2_SIZE {
+        while i < L1_SIZE {
             let mut j = 0;
             while j < 2*HIDDEN_SIZE {
                 l1_weights[i][j] = read_i16(bytes, offset);
@@ -73,11 +78,31 @@ impl Network {
             i += 1;
         }
 
-        let mut l1_bias = [0; L2_SIZE];
+        let mut l1_bias = [0; L1_SIZE];
         i = 0;
 
-        while i < L2_SIZE {
+        while i < L1_SIZE {
             l1_bias[i] = read_i16(bytes, offset);
+            offset += 2;
+            i += 1;
+        }
+
+        let mut l2_weights = [[0; L1_SIZE]; L2_SIZE];
+        i = 0;
+        while i < L2_SIZE {
+            let mut j = 0;
+            while j < L1_SIZE {
+                l2_weights[i][j] = read_i16(bytes, offset);
+                offset += 2;
+                j += 1;
+            }
+            i += 1;
+        }
+
+        let mut l2_bias = [0; L2_SIZE];
+        i = 0;
+        while i < L2_SIZE {
+            l2_bias[i] = read_i16(bytes, offset);
             offset += 2;
             i += 1;
         }
@@ -99,6 +124,8 @@ impl Network {
             feature_bias,
             l1_weights,
             l1_bias,
+            l2_weights,
+            l2_bias,
             output_weights,
             output_bias,
         }
@@ -133,9 +160,9 @@ impl Network {
             idx += 16;
         }
 
-        let mut output = 0i64;
+        let mut l1_activated = [0i16; L1_SIZE];
         let mut neuron = 0;
-        while neuron < L2_SIZE {
+        while neuron < L1_SIZE {
             let mut us_dot = _mm256_setzero_si256();
             let mut them_dot = _mm256_setzero_si256();
             idx = 0;
@@ -159,26 +186,42 @@ impl Network {
                 idx += 16;
             }
 
-            let mut lanes = [0i32; 8];
             let dot = _mm256_add_epi32(us_dot, them_dot);
-            unsafe { _mm256_storeu_si256(lanes.as_mut_ptr().cast(), dot) };
-            let mut hidden = i64::from(lanes.into_iter().sum::<i32>()) / i64::from(QA);
+            let mut hidden = i64::from(unsafe { horizontal_sum_i32(dot) }) / i64::from(QA);
             hidden += i64::from(self.l1_bias[neuron]);
-            hidden = hidden.clamp(0, i64::from(QA * QB));
-            output += hidden * hidden * i64::from(self.output_weights[neuron]);
+            l1_activated[neuron] = quantized_screlu(hidden);
             neuron += 1;
         }
 
-        output /= i64::from(QA) * i64::from(QB).pow(2);
-        output += i64::from(self.output_bias);
+        let l1_values = unsafe { _mm256_loadu_si256(l1_activated.as_ptr().cast()) };
+        let mut l2_activated = [0i16; L2_SIZE];
+        neuron = 0;
+        while neuron < L2_SIZE {
+            let weights = unsafe { _mm256_loadu_si256(self.l2_weights[neuron].as_ptr().cast()) };
+            let dot = _mm256_madd_epi16(l1_values, weights);
+            let hidden = i64::from(unsafe { horizontal_sum_i32(dot) }) + i64::from(self.l2_bias[neuron]);
+            l2_activated[neuron] = quantized_screlu(hidden);
+            neuron += 1;
+        }
+
+        let mut output = _mm256_setzero_si256();
+        idx = 0;
+        while idx < L2_SIZE {
+            let values = unsafe { _mm256_loadu_si256(l2_activated.as_ptr().add(idx).cast()) };
+            let weights = unsafe { _mm256_loadu_si256(self.output_weights.as_ptr().add(idx).cast()) };
+            output = _mm256_add_epi32(output, _mm256_madd_epi16(values, weights));
+            idx += 16;
+        }
+
+        let output = i64::from(unsafe { horizontal_sum_i32(output) }) + i64::from(self.output_bias);
         (output * i64::from(EVAL_SCALE) / i64::from(QA * QB)) as i32
     }
 
     #[inline(always)]
     fn safe_evaluate(&self, us: &Accumulator, them: &Accumulator) -> i32 {
-        let mut output = 0;
+        let mut l1_activated = [0i16; L1_SIZE];
 
-        for neuron in 0..L2_SIZE {
+        for neuron in 0..L1_SIZE {
             let mut dot: i64 = 0;
 
             for hidden in 0..HIDDEN_SIZE {
@@ -190,17 +233,42 @@ impl Network {
 
             dot /= QA as i64;
             dot += i64::from(self.l1_bias[neuron]);
-
-            dot = dot.clamp(0, (QA*QB) as i64).pow(2);
-            dot *= self.output_weights[neuron] as i64;
-
-            output += dot;
+            l1_activated[neuron] = quantized_screlu(dot);
         }
 
-        output /= (QA as i64) * (QB as i64).pow(2);
-        output += i64::from(self.output_bias);
-        (i64::from(output) * i64::from(EVAL_SCALE) / i64::from(QA * QB)) as i32
+        let mut l2_activated = [0i16; L2_SIZE];
+        for neuron in 0..L2_SIZE {
+            let mut dot = i64::from(self.l2_bias[neuron]);
+            for hidden in 0..L1_SIZE {
+                dot += i64::from(l1_activated[hidden])
+                    * i64::from(self.l2_weights[neuron][hidden]);
+            }
+            l2_activated[neuron] = quantized_screlu(dot);
+        }
+
+        let mut output = i64::from(self.output_bias);
+        for hidden in 0..L2_SIZE {
+            output += i64::from(l2_activated[hidden])
+                * i64::from(self.output_weights[hidden]);
+        }
+
+        (output * i64::from(EVAL_SCALE) / i64::from(QA * QB)) as i32
     }
+}
+
+#[inline(always)]
+fn quantized_screlu(value: i64) -> i16 {
+    let value = value.clamp(0, i64::from(QA * QB));
+    (value * value / (i64::from(QA) * i64::from(QB).pow(2))) as i16
+}
+
+#[target_feature(enable = "avx2")]
+unsafe fn horizontal_sum_i32(value: std::arch::x86_64::__m256i) -> i32 {
+    let low = _mm256_castsi256_si128(value);
+    let high = _mm256_extracti128_si256::<1>(value);
+    let sum = _mm_add_epi32(low, high);
+    let sum = _mm_hadd_epi32(sum, sum);
+    _mm_cvtsi128_si32(_mm_hadd_epi32(sum, sum))
 }
 
 const fn read_i16(bytes: &[u8], offset: usize) -> i16 {
@@ -217,11 +285,10 @@ const fn output_abs_sum(weights: &[i16; OUTPUT_INPUT_SIZE]) -> i64 {
     sum
 }
 
-const OUTPUT_RAW_BOUND: i64 = output_abs_sum(&NETWORK.output_weights) * QA as i64 * QA as i64;
-const OUTPUT_SCALED_BOUND: i64 =
-    (OUTPUT_RAW_BOUND / QA as i64 + NETWORK.output_bias.unsigned_abs() as i64) * EVAL_SCALE as i64;
-const _: () = assert!(OUTPUT_RAW_BOUND <= i32::MAX as i64);
-const _: () = assert!(OUTPUT_SCALED_BOUND / (QA * QB) as i64 <= i32::MAX as i64);
+const OUTPUT_RAW_BOUND: i64 = output_abs_sum(&NETWORK.output_weights) * QA as i64
+    + NETWORK.output_bias.unsigned_abs() as i64;
+const OUTPUT_SCALED_BOUND: i64 = OUTPUT_RAW_BOUND * EVAL_SCALE as i64 / (QA * QB) as i64;
+const _: () = assert!(OUTPUT_SCALED_BOUND <= i32::MAX as i64);
 const _: () = assert!(HIDDEN_SIZE % 16 == 0);
 
 #[repr(align(32))]

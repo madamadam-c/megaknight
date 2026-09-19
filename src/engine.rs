@@ -1354,7 +1354,7 @@ impl Engine {
         }
 
         let fallback_move = root_moves[0];
-        let max_depth = request.limits.depth.unwrap_or(i32::MAX).max(1);
+        let max_depth = request.limits.depth.unwrap_or(1023).max(1);
         let mut context = SearchContext::new(
             &request.board,
             request.history.clone(),
