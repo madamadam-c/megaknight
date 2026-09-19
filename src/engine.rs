@@ -598,13 +598,13 @@ pub struct Engine {
     pawn_history: PawnHistory,
     move_stack: Vec<StackMove>,
     eval_stack: Vec<Option<i32>>,
-    lmr_logs: [f32; 256],
+    lmr_logs: [f32; 1024],
 }
 
 impl Engine {
     pub fn new() -> Self {
-        let mut lmr_logs = [0.0; 256];
-        for i in 1..256 {
+        let mut lmr_logs = [0.0; 1024];
+        for i in 1..1024 {
             lmr_logs[i] = (i as f32).ln();
         }
 
