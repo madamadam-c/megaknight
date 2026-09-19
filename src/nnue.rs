@@ -1,4 +1,4 @@
-use std::arch::x86_64::{__m256i, _mm256_add_epi16, _mm256_add_epi32, _mm256_and_si256, _mm256_cmpgt_epi16, _mm256_loadu_si256, _mm256_madd_epi16, _mm256_max_epi16, _mm256_min_epi16, _mm256_mullo_epi16, _mm256_set1_epi16, _mm256_setzero_si256, _mm256_slli_epi32, _mm256_storeu_si256, _mm256_sub_epi16};
+use std::arch::x86_64::{_mm256_add_epi16, _mm256_add_epi32, _mm256_loadu_si256, _mm256_madd_epi16, _mm256_max_epi16, _mm256_min_epi16, _mm256_mullo_epi16, _mm256_set1_epi16, _mm256_setzero_si256, _mm256_storeu_si256, _mm256_sub_epi16};
 
 use cozy_chess::{
     Board,
@@ -16,11 +16,12 @@ const QB: i32 = 64;
 const EVAL_SCALE: i32 = 400;
 const NETWORK_ALIGNMENT: usize = 64;
 
-const NETWORK_BYTES: &[u8] = include_bytes!("../networks/17_09_26-2.bin");
+const NETWORK_BYTES: &[u8] = include_bytes!("../networks/19_09_26.bin");
 const NETWORK_FILE_SIZE: usize = NETWORK_BYTES.len();
-const HIDDEN_SIZE: usize = hidden_size_for_file_size(NETWORK_FILE_SIZE);
-const OUTPUT_INPUT_SIZE: usize = 2 * HIDDEN_SIZE;
-const NETWORK_PAYLOAD_SIZE: usize = network_payload_size(HIDDEN_SIZE);
+const HIDDEN_SIZE: usize = 128;
+const L2_SIZE: usize = 16;
+const OUTPUT_INPUT_SIZE: usize = L2_SIZE;
+const NETWORK_PAYLOAD_SIZE: usize = 205_122;
 const NETWORK: Network = Network::from_bytes(NETWORK_BYTES);
 
 #[repr(C, align(64))]
@@ -28,7 +29,9 @@ const NETWORK: Network = Network::from_bytes(NETWORK_BYTES);
 struct Network {
     feature_weights: [[i16; HIDDEN_SIZE]; INPUT_SIZE],
     feature_bias: [i16; HIDDEN_SIZE],
-    output_weights: [i16; OUTPUT_INPUT_SIZE],
+    l1_weights: [[i16; 2*HIDDEN_SIZE]; L2_SIZE],
+    l1_bias: [i16; 16],
+    output_weights: [i16; L2_SIZE],
     output_bias: i16,
 }
 
@@ -57,6 +60,28 @@ impl Network {
             hidden += 1;
         }
 
+        let mut l1_weights = [[0; 2*HIDDEN_SIZE]; L2_SIZE];
+        let mut i = 0;
+
+        while i < L2_SIZE {
+            let mut j = 0;
+            while j < 2*HIDDEN_SIZE {
+                l1_weights[i][j] = read_i16(bytes, offset);
+                offset += 2;
+                j += 1;
+            }
+            i += 1;
+        }
+
+        let mut l1_bias = [0; L2_SIZE];
+        i = 0;
+
+        while i < L2_SIZE {
+            l1_bias[i] = read_i16(bytes, offset);
+            offset += 2;
+            i += 1;
+        }
+
         let mut output_weights = [0; OUTPUT_INPUT_SIZE];
         hidden = 0;
         while hidden < OUTPUT_INPUT_SIZE {
@@ -72,6 +97,8 @@ impl Network {
         Self {
             feature_weights,
             feature_bias,
+            l1_weights,
+            l1_bias,
             output_weights,
             output_bias,
         }
@@ -80,106 +107,104 @@ impl Network {
     #[inline(always)]
     fn evaluate(&self, us: &Accumulator, them: &Accumulator) -> i32 {
         if is_x86_feature_detected!("avx2") {
-            unsafe {return self.avx2_evaluate(us, them);}
+            unsafe { self.avx2_evaluate(us, them) }
         } else {
-            return self.save_evaluate(us, them);
+            self.safe_evaluate(us, them)
         }
     }
-
-    /*
-    simd is weird
-    */
 
     #[target_feature(enable = "avx2")]
     unsafe fn avx2_evaluate(&self, us: &Accumulator, them: &Accumulator) -> i32 {
         let lower = _mm256_setzero_si256();
         let upper = _mm256_set1_epi16(QA as i16);
-
-        let mut output_store = _mm256_setzero_si256();
+        let mut us_clamped = [0i16; HIDDEN_SIZE];
+        let mut them_clamped = [0i16; HIDDEN_SIZE];
 
         let mut idx = 0;
         while idx < HIDDEN_SIZE {
-            let mut us_chunk   = unsafe {_mm256_loadu_si256(us.values.as_ptr().add(idx) as *const __m256i)};
-            let mut them_chunk = unsafe {_mm256_loadu_si256(them.values.as_ptr().add(idx) as *const __m256i)};
-            
-            // clamp
-            us_chunk   = _mm256_max_epi16(_mm256_min_epi16(us_chunk, upper), lower);
+            let mut us_chunk = unsafe { _mm256_loadu_si256(us.values.as_ptr().add(idx).cast()) };
+            let mut them_chunk = unsafe { _mm256_loadu_si256(them.values.as_ptr().add(idx).cast()) };
+            us_chunk = _mm256_max_epi16(_mm256_min_epi16(us_chunk, upper), lower);
             them_chunk = _mm256_max_epi16(_mm256_min_epi16(them_chunk, upper), lower);
-
-            // store the clamped values for later
-            let us_clamp   = us_chunk;
-            let them_clamp = them_chunk;
-
-            // load weights
-            let us_weights   = unsafe {_mm256_loadu_si256(self.output_weights.as_ptr().add(idx) as *const __m256i)};
-            let them_weights = unsafe {_mm256_loadu_si256(self.output_weights.as_ptr().add(idx+HIDDEN_SIZE) as *const __m256i)};
-
-            // this instruction multiplies by the weights, and turns it from 16x i16s into 8x i32s by adding adjacent pairs
-            // eg. [a,b] x [c,d] = [a*c+b*d]
-            us_chunk   = _mm256_mullo_epi16(us_chunk, us_weights);
-            them_chunk = _mm256_mullo_epi16(them_chunk, them_weights);
-
-            // square
-            us_chunk   = _mm256_madd_epi16(us_chunk, us_clamp);
-            them_chunk = _mm256_madd_epi16(them_chunk, them_clamp);
-
-            // add to the output buffer
-            output_store = _mm256_add_epi32(output_store, us_chunk);
-            output_store = _mm256_add_epi32(output_store, them_chunk);
-
+            unsafe {
+                _mm256_storeu_si256(us_clamped.as_mut_ptr().add(idx).cast(), us_chunk);
+                _mm256_storeu_si256(them_clamped.as_mut_ptr().add(idx).cast(), them_chunk);
+            }
             idx += 16;
         }
 
-        let mut values = [0i32; 8];
-        unsafe {_mm256_storeu_si256(values.as_mut_ptr().cast::<__m256i>(), output_store) };
+        let mut output = 0i64;
+        let mut neuron = 0;
+        while neuron < L2_SIZE {
+            let mut us_dot = _mm256_setzero_si256();
+            let mut them_dot = _mm256_setzero_si256();
+            idx = 0;
+            while idx < HIDDEN_SIZE {
+                let us_values = unsafe { _mm256_loadu_si256(us_clamped.as_ptr().add(idx).cast()) };
+                let them_values = unsafe { _mm256_loadu_si256(them_clamped.as_ptr().add(idx).cast()) };
+                let us_weights = unsafe {
+                    _mm256_loadu_si256(self.l1_weights[neuron].as_ptr().add(idx).cast())
+                };
+                let them_weights = unsafe {
+                    _mm256_loadu_si256(
+                        self.l1_weights[neuron].as_ptr().add(HIDDEN_SIZE + idx).cast(),
+                    )
+                };
 
-        let mut output: i32 = values.into_iter().sum();
+                let us_weighted = _mm256_mullo_epi16(us_values, us_weights);
+                let them_weighted = _mm256_mullo_epi16(them_values, them_weights);
+                us_dot = _mm256_add_epi32(us_dot, _mm256_madd_epi16(us_weighted, us_values));
+                them_dot =
+                    _mm256_add_epi32(them_dot, _mm256_madd_epi16(them_weighted, them_values));
+                idx += 16;
+            }
 
-        output /= QA;
-        output += i32::from(self.output_bias);
+            let mut lanes = [0i32; 8];
+            let dot = _mm256_add_epi32(us_dot, them_dot);
+            unsafe { _mm256_storeu_si256(lanes.as_mut_ptr().cast(), dot) };
+            let mut hidden = i64::from(lanes.into_iter().sum::<i32>()) / i64::from(QA);
+            hidden += i64::from(self.l1_bias[neuron]);
+            hidden = hidden.clamp(0, i64::from(QA * QB));
+            output += hidden * hidden * i64::from(self.output_weights[neuron]);
+            neuron += 1;
+        }
 
-        return (i64::from(output) * i64::from(EVAL_SCALE) / i64::from(QA * QB)) as i32;
+        output /= i64::from(QA) * i64::from(QB).pow(2);
+        output += i64::from(self.output_bias);
+        (output * i64::from(EVAL_SCALE) / i64::from(QA * QB)) as i32
     }
 
     #[inline(always)]
-    fn save_evaluate(&self, us: &Accumulator, them: &Accumulator) -> i32 {
+    fn safe_evaluate(&self, us: &Accumulator, them: &Accumulator) -> i32 {
         let mut output = 0;
-        for hidden in 0..HIDDEN_SIZE {
-            let us_value = i32::from(us.values[hidden]).clamp(0, QA);
-            let them_value = i32::from(them.values[hidden]).clamp(0, QA);
-            output += us_value * us_value * i32::from(self.output_weights[hidden]);
-            output +=
-                them_value * them_value * i32::from(self.output_weights[HIDDEN_SIZE + hidden]);
+
+        for neuron in 0..L2_SIZE {
+            let mut dot: i64 = 0;
+
+            for hidden in 0..HIDDEN_SIZE {
+                let us_value = i32::from(us.values[hidden]).clamp(0, QA);
+                let them_value = i32::from(them.values[hidden]).clamp(0, QA);
+                dot += (us_value * us_value * i32::from(self.l1_weights[neuron][hidden])) as i64;
+                dot += (them_value * them_value * i32::from(self.l1_weights[neuron][HIDDEN_SIZE + hidden])) as i64;
+            }
+
+            dot /= QA as i64;
+            dot += i64::from(self.l1_bias[neuron]);
+
+            dot = dot.clamp(0, (QA*QB) as i64).pow(2);
+            dot *= self.output_weights[neuron] as i64;
+
+            output += dot;
         }
 
-        output /= QA;
-        output += i32::from(self.output_bias);
+        output /= (QA as i64) * (QB as i64).pow(2);
+        output += i64::from(self.output_bias);
         (i64::from(output) * i64::from(EVAL_SCALE) / i64::from(QA * QB)) as i32
     }
 }
 
 const fn read_i16(bytes: &[u8], offset: usize) -> i16 {
     i16::from_le_bytes([bytes[offset], bytes[offset + 1]])
-}
-
-const fn network_payload_size(hidden_size: usize) -> usize {
-    (INPUT_SIZE * hidden_size + hidden_size + 2 * hidden_size + 1) * 2
-}
-
-const fn padded_network_file_size(hidden_size: usize) -> usize {
-    let payload_size = network_payload_size(hidden_size);
-    (payload_size + NETWORK_ALIGNMENT - 1) / NETWORK_ALIGNMENT * NETWORK_ALIGNMENT
-}
-
-const fn hidden_size_for_file_size(file_size: usize) -> usize {
-    let mut hidden_size = 1;
-    while padded_network_file_size(hidden_size) <= file_size {
-        if padded_network_file_size(hidden_size) == file_size {
-            return hidden_size;
-        }
-        hidden_size += 1;
-    }
-    panic!("NNUE file size does not match a padded 768->N->N->1 network");
 }
 
 const fn output_abs_sum(weights: &[i16; OUTPUT_INPUT_SIZE]) -> i64 {
