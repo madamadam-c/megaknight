@@ -5,8 +5,10 @@ RUSTFLAGS ?= -C target-cpu=native
 .PHONY: all clean
 
 all:
-	$(CARGO) build --release --locked
-	cp target/release/chessbot "$(EXE)"
+	rm -rf target/pgo-gen target/pgo-use target/pgo-data
+	mkdir -p target/pgo-data
+	sh profile_and_build.sh
+	cp target/pgo-use/release/chessbot "$(EXE)"
 
 clean:
 	$(CARGO) clean

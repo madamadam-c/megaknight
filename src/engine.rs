@@ -823,6 +823,7 @@ impl Engine {
         Some(result)
     }
 
+    #[inline(always)]
     fn search_move(
         &mut self,
         board: &Board,
