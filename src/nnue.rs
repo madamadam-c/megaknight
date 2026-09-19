@@ -94,7 +94,6 @@ impl Network {
     unsafe fn avx2_evaluate(&self, us: &Accumulator, them: &Accumulator) -> i32 {
         let lower = _mm256_setzero_si256();
         let upper = _mm256_set1_epi16(QA as i16);
-        let ones  = _mm256_set1_epi16(1);
 
         let mut output_store = _mm256_setzero_si256();
 
@@ -107,13 +106,9 @@ impl Network {
             us_chunk   = _mm256_max_epi16(_mm256_min_epi16(us_chunk, upper), lower);
             them_chunk = _mm256_max_epi16(_mm256_min_epi16(them_chunk, upper), lower);
 
-            // square
-            us_chunk   = _mm256_mullo_epi16(us_chunk, us_chunk);
-            them_chunk = _mm256_mullo_epi16(them_chunk, them_chunk);
-
-            // some might appear negative because of the squaring, find which ones it is
-            let mut us_neg   = _mm256_cmpgt_epi16(lower, us_chunk); // determines the indices where 0 > value
-            let mut them_neg = _mm256_cmpgt_epi16(lower, them_chunk); // same here
+            // store the clamped values for later
+            let us_clamp   = us_chunk;
+            let them_clamp = them_chunk;
 
             // load weights
             let us_weights   = unsafe {_mm256_loadu_si256(self.output_weights.as_ptr().add(idx) as *const __m256i)};
@@ -121,24 +116,12 @@ impl Network {
 
             // this instruction multiplies by the weights, and turns it from 16x i16s into 8x i32s by adding adjacent pairs
             // eg. [a,b] x [c,d] = [a*c+b*d]
-            us_chunk   = _mm256_madd_epi16(us_chunk, us_weights);
-            them_chunk = _mm256_madd_epi16(them_chunk, them_weights);
-            
-            // determine which weights we need to add again
-            us_neg   = _mm256_and_si256(us_neg, us_weights);
-            them_neg = _mm256_and_si256(them_neg, them_weights);
+            us_chunk   = _mm256_mullo_epi16(us_chunk, us_weights);
+            them_chunk = _mm256_mullo_epi16(them_chunk, them_weights);
 
-            // do the same pair sum business to get it into the same form, using an array of ones as a dummy
-            us_neg   = _mm256_madd_epi16(us_neg, ones);
-            them_neg = _mm256_madd_epi16(them_neg, ones);
-
-            // multiply by 65536 because its the high bit
-            us_neg   = _mm256_slli_epi32::<16>(us_neg);
-            them_neg = _mm256_slli_epi32::<16>(them_neg);
-
-            // add the correction terms back
-            us_chunk   = _mm256_add_epi32(us_chunk, us_neg);
-            them_chunk = _mm256_add_epi32(them_chunk, them_neg);
+            // square
+            us_chunk   = _mm256_madd_epi16(us_chunk, us_clamp);
+            them_chunk = _mm256_madd_epi16(them_chunk, them_clamp);
 
             // add to the output buffer
             output_store = _mm256_add_epi32(output_store, us_chunk);
