@@ -383,7 +383,7 @@ struct MovePicker {
     good_captures: Vec<EngineMove>,
     quiets: Vec<EngineMove>,
     bad_captures: Vec<EngineMove>,
-    tried_captures: Vec<EngineMove>,
+    // tried_captures: Vec<EngineMove>,
     quiet_remaining: usize,
 }
 
@@ -445,7 +445,7 @@ impl MovePicker {
             good_captures: moves.good_captures,
             quiets: moves.quiets,
             bad_captures: moves.bad_captures,
-            tried_captures: Vec::with_capacity(8),
+            // tried_captures: Vec::with_capacity(8),
             quiet_remaining,
         }
     }
@@ -469,7 +469,7 @@ impl MovePicker {
                             // 0
                         }
                     }) {
-                        self.tried_captures.push(mv);
+                        // self.tried_captures.push(mv);
                         return Some(mv);
                     }
                     self.stage = Stage::Quiets;
@@ -494,7 +494,7 @@ impl MovePicker {
                         |mv| mv.see_score as i32, // mv.history
                                                   // 0
                     ) {
-                        self.tried_captures.push(mv);
+                        // self.tried_captures.push(mv);
                         return Some(mv);
                     }
                     self.stage = Stage::Done;
@@ -556,7 +556,7 @@ pub struct Engine {
     nnue: NnueState,
     quiet_history: QuietHistory,
     continuation_history: ContinuationHistory,
-    capture_history: CaptureHistory,
+    // capture_history: CaptureHistory,
     pawn_correction_history: CorrectionHistory,
     stm_non_pawn_correction_history: CorrectionHistory,
     nstm_non_pawn_correction_history: CorrectionHistory,
@@ -574,7 +574,7 @@ impl Engine {
             nnue: NnueState::default(),
             quiet_history: QuietHistory::new(),
             continuation_history: ContinuationHistory::new(),
-            capture_history: CaptureHistory::new(),
+            // capture_history: CaptureHistory::new(),
             pawn_correction_history: CorrectionHistory::new(),
             stm_non_pawn_correction_history: CorrectionHistory::new(),
             nstm_non_pawn_correction_history: CorrectionHistory::new(),
@@ -631,12 +631,12 @@ impl Engine {
 
                 if emv.is_capture {
                     emv.see_score = static_exchange_evaluation(board, &emv);
-                    emv.history = self.capture_history.get(
-                        board.side_to_move() as usize,
-                        mv.to,
-                        emv.piece_type,
-                        emv.target_type.unwrap(),
-                    );
+                    // emv.history = self.capture_history.get(
+                    //     board.side_to_move() as usize,
+                    //     mv.to,
+                    //     emv.piece_type,
+                    //     emv.target_type.unwrap(),
+                    // );
                 } else {
                     let quiet_history =
                         self.quiet_history
@@ -707,7 +707,7 @@ impl Engine {
                     emv.see_score = static_exchange_evaluation(board, &emv);
                     if emv.see_score >= 0 {
                         moves.good_captures.push(emv);
-                    } else {
+                    } else if emv.see_score > -24 {
                         moves.bad_captures.push(emv);
                     }
                 } else if emv.promotion {
@@ -1328,7 +1328,7 @@ impl Engine {
         self.move_stack.clear();
         self.eval_stack = vec![None; 256];
         self.quiet_history.clear();
-        self.capture_history.clear();
+        // self.capture_history.clear();
         self.nnue = NnueState::from_board(&request.board);
 
         let mut previous_score = 0;
