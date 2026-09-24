@@ -1,4 +1,4 @@
-use std::arch::x86_64::{__m256i, _mm256_add_epi16, _mm256_add_epi32, _mm256_and_si256, _mm256_cmpgt_epi16, _mm256_loadu_si256, _mm256_madd_epi16, _mm256_max_epi16, _mm256_min_epi16, _mm256_mullo_epi16, _mm256_set1_epi16, _mm256_setzero_si256, _mm256_slli_epi32, _mm256_storeu_si256, _mm256_sub_epi16};
+use std::arch::x86_64::{__m256i, _mm256_add_epi16, _mm256_add_epi32, _mm256_loadu_si256, _mm256_madd_epi16, _mm256_max_epi16, _mm256_min_epi16, _mm256_mullo_epi16, _mm256_set1_epi16, _mm256_setzero_si256, _mm256_slli_epi32, _mm256_storeu_si256, _mm256_sub_epi16};
 
 use cozy_chess::{
     Board,
@@ -16,7 +16,7 @@ const QB: i32 = 64;
 const EVAL_SCALE: i32 = 400;
 const NETWORK_ALIGNMENT: usize = 64;
 
-const NETWORK_BYTES: &[u8] = include_bytes!("../networks/24_09_26-2.bin");
+const NETWORK_BYTES: &[u8] = include_bytes!("../networks/24_09_26.bin");
 const NETWORK_FILE_SIZE: usize = NETWORK_BYTES.len();
 const HIDDEN_SIZE: usize = hidden_size_for_file_size(NETWORK_FILE_SIZE);
 const OUTPUT_INPUT_SIZE: usize = 2 * HIDDEN_SIZE;
@@ -196,7 +196,7 @@ const fn output_abs_sum(weights: &[i16; OUTPUT_INPUT_SIZE]) -> i64 {
 const OUTPUT_RAW_BOUND: i64 = output_abs_sum(&NETWORK.output_weights) * QA as i64 * QA as i64;
 const OUTPUT_SCALED_BOUND: i64 =
     (OUTPUT_RAW_BOUND / QA as i64 + NETWORK.output_bias.unsigned_abs() as i64) * EVAL_SCALE as i64;
-// const _: () = assert!(OUTPUT_RAW_BOUND <= i32::MAX as i64);
+const _: () = assert!(OUTPUT_RAW_BOUND <= i32::MAX as i64);
 const _: () = assert!(OUTPUT_SCALED_BOUND / (QA * QB) as i64 <= i32::MAX as i64);
 const _: () = assert!(HIDDEN_SIZE % 16 == 0);
 
