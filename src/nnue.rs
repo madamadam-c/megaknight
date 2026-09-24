@@ -16,7 +16,7 @@ const QB: i32 = 64;
 const EVAL_SCALE: i32 = 400;
 const NETWORK_ALIGNMENT: usize = 64;
 
-const NETWORK_BYTES: &[u8] = include_bytes!("../networks/23_09_26-3.bin");
+const NETWORK_BYTES: &[u8] = include_bytes!("../networks/24_09_26.bin");
 const NETWORK_FILE_SIZE: usize = NETWORK_BYTES.len();
 const HIDDEN_SIZE: usize = hidden_size_for_file_size(NETWORK_FILE_SIZE);
 const OUTPUT_INPUT_SIZE: usize = 2 * HIDDEN_SIZE;
