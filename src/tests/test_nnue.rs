@@ -30,12 +30,15 @@ fn state_stores_two_accumulators_and_their_orientation() {
 }
 
 #[test]
-fn hidden_size_is_inferred_from_padded_file_size() {
-    assert_eq!(hidden_size_for_file_size(24_704), 16);
-    assert_eq!(hidden_size_for_file_size(98_752), 64);
-    assert_eq!(hidden_size_for_file_size(197_440), 128);
-    assert_eq!(hidden_size_for_file_size(789_568), 512);
-    assert_eq!(HIDDEN_SIZE, hidden_size_for_file_size(NETWORK_FILE_SIZE));
+fn network_file_matches_bucketed_layout() {
+    assert_eq!(HIDDEN_SIZE, 512);
+    assert_eq!(NETWORK_FILE_SIZE, 7_881_792);
+    assert_eq!((NETWORK_PAYLOAD_SIZE + 63) / 64 * 64, NETWORK_FILE_SIZE);
+    for bucket in [0, 3, 7] {
+        for input in [0, HIDDEN_SIZE, OUTPUT_INPUT_SIZE - 1] {
+            assert_eq!(NETWORK.output_weights(bucket)[input], read_i16(NETWORK_BYTES, OUTPUT_WEIGHTS_OFFSET + 2 * (bucket * OUTPUT_INPUT_SIZE + input)));
+        }
+    }
 }
 
 #[test]
@@ -79,11 +82,28 @@ fn incrementally_updates_castling() {
 }
 
 #[test]
-fn refreshes_only_when_a_king_crosses_the_de_boundary() {
+fn refreshes_when_a_king_crosses_the_de_boundary_or_changes_bucket() {
     assert_incremental_move("7k/8/8/8/8/3K4/8/8 w - - 0 1", "d3e3");
     assert_incremental_move("8/8/3k4/8/8/8/8/K7 b - - 0 1", "d6e6");
     assert_incremental_move("7k/8/8/8/8/4K3/8/8 w - - 0 1", "e3d3");
     assert_incremental_move("8/8/4k3/8/8/8/8/K7 b - - 0 1", "e6d6");
+    assert_incremental_move("7k/8/8/8/8/8/8/3K4 w - - 0 1", "d1c1");
+    assert_incremental_move("7k/8/8/8/8/8/8/4K3 w - - 0 1", "e1f1");
+    assert_incremental_move("8/3k4/8/8/8/8/8/K7 b - - 0 1", "d7c7");
+}
+
+#[test]
+fn capture_crosses_output_bucket_boundary() {
+    let mut board = Board::from_fen("7k/8/8/3p4/4P3/8/4PN2/K7 w - - 0 1", false).unwrap();
+    let before = NnueState::from_board(&board);
+    let mv = parse_uci_move(&board, "e4d5").unwrap();
+    let engine_move = EngineMove::new(&board, mv, Pawn, false);
+    board.play_unchecked(mv);
+    let mut incremental = before;
+    incremental.play_move(&board, White, &engine_move);
+    assert_eq!(incremental, NnueState::from_board(&board));
+    assert_eq!(before.output_bucket, 1);
+    assert_eq!(incremental.output_bucket, 0);
 }
 
 #[test]
@@ -113,12 +133,62 @@ fn state_keeps_a_distinct_accumulator_for_each_perspective() {
     assert_ne!(state.accumulators[0], state.accumulators[1]);
     assert_eq!(
         state.evaluate(White),
-        NETWORK.evaluate(&state.accumulators[0], &state.accumulators[1])
+        NETWORK.evaluate(&state.accumulators[0], &state.accumulators[1], state.output_bucket as usize)
     );
     assert_eq!(
         state.evaluate(Black),
-        NETWORK.evaluate(&state.accumulators[1], &state.accumulators[0])
+        NETWORK.evaluate(&state.accumulators[1], &state.accumulators[0], state.output_bucket as usize)
     );
+}
+
+#[test]
+fn scalar_and_simd_inference_agree_across_material_buckets() {
+    for fen in [
+        "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+        "7k/8/8/3p4/4P3/8/4PN2/K7 w - - 0 1",
+        "r3k2r/p1ppqpb1/bn2pnp1/2pP4/1p2P3/2N2N2/PPQBBPPP/R3K2R w KQkq - 0 1",
+        "8/5pk1/6p1/3pP3/3P1P2/6P1/5K2/8 w - - 0 40",
+    ] {
+        let board = Board::from_fen(fen, false).unwrap();
+        let state = NnueState::from_board(&board);
+        for side in [White, Black] {
+            let us = &state.accumulators[color_index(side)];
+            let them = &state.accumulators[color_index(!side)];
+            let bucket = state.output_bucket as usize;
+            assert_eq!(NETWORK.save_evaluate(us, them, bucket), unsafe { NETWORK.avx2_evaluate(us, them, bucket) }, "{fen}");
+        }
+    }
+}
+
+#[test]
+fn randomized_games_match_rebuilt_state_and_scalar_inference() {
+    let mut rng = 0x9E3779B97F4A7C15u64;
+    for _ in 0..4 {
+        let mut board = Board::default();
+        let mut state = NnueState::from_board(&board);
+        for _ in 0..120 {
+            let mut moves = Vec::new();
+            board.generate_moves(|piece_moves| {
+                moves.extend(piece_moves);
+                false
+            });
+            if moves.is_empty() { break; }
+            rng ^= rng << 13;
+            rng ^= rng >> 7;
+            rng ^= rng << 17;
+            let mv = moves[(rng as usize) % moves.len()];
+            let piece = board.piece_on(mv.from).unwrap();
+            let engine_move = EngineMove::new(&board, mv, piece, false);
+            let color = board.side_to_move();
+            board.play_unchecked(mv);
+            state.play_move(&board, color, &engine_move);
+            assert_eq!(state, NnueState::from_board(&board), "after {mv} in {board}");
+
+            let us = &state.accumulators[color_index(board.side_to_move())];
+            let them = &state.accumulators[color_index(!board.side_to_move())];
+            assert_eq!(state.evaluate(board.side_to_move()), NETWORK.save_evaluate(us, them, state.output_bucket as usize), "{board}");
+        }
+    }
 }
 
 #[test]
