@@ -21,7 +21,7 @@ const INPUT_BUCKETS: usize = 10;
 // Change this path alone to select a network; all dimensions and branches are compile-time constants.
 macro_rules! network_file {
     // () => { "../networks/24_09_26.bin" };
-    () => { "../networks/25_09_26/512_multi.bin" };
+    () => { "../networks/25_09_26/512_IB.bin" };
 }
 
 const NETWORK_BYTES: &[u8] = include_bytes!(network_file!());
