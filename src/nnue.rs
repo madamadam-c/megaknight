@@ -24,14 +24,14 @@ const OUTPUT_WEIGHTS_OFFSET: usize = FEATURE_BIAS_OFFSET + HIDDEN_SIZE * 2;
 const OUTPUT_BIAS_OFFSET: usize = OUTPUT_WEIGHTS_OFFSET + OUTPUT_BUCKETS * OUTPUT_INPUT_SIZE * 2;
 const NETWORK_PAYLOAD_SIZE: usize = OUTPUT_BIAS_OFFSET + OUTPUT_BUCKETS * 2;
 
-const NETWORK_BYTES: &[u8] = include_bytes!("../networks/27_09_26.bin");
+const NETWORK_BYTES: &[u8] = include_bytes!("../networks/28_09_26.bin");
 const NETWORK_FILE_SIZE: usize = NETWORK_BYTES.len();
 const NETWORK: Network = Network;
 
 #[repr(align(64))]
 struct AlignedBytes<const N: usize>([u8; N]);
 
-static NETWORK_DATA: AlignedBytes<NETWORK_FILE_SIZE> = AlignedBytes(*include_bytes!("../networks/27_09_26.bin"));
+static NETWORK_DATA: AlignedBytes<NETWORK_FILE_SIZE> = AlignedBytes(*include_bytes!("../networks/28_09_26.bin"));
 
 #[cfg(not(target_endian = "little"))]
 compile_error!("embedded NNUE weights require little-endian i16 storage");
