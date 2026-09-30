@@ -32,9 +32,11 @@ fn state_stores_two_accumulators_and_their_orientation() {
 #[test]
 fn network_file_matches_bucketed_layout() {
     assert_eq!(HIDDEN_SIZE, 512);
-    assert_eq!(NETWORK_FILE_SIZE, 7_881_792);
+    assert_eq!(INPUT_BUCKETS, 1);
+    assert_eq!(OUTPUT_BUCKETS, 1);
+    assert_eq!(NETWORK_FILE_SIZE, 789_568);
     assert_eq!((NETWORK_PAYLOAD_SIZE + 63) / 64 * 64, NETWORK_FILE_SIZE);
-    for bucket in [0, 3, 7] {
+    for bucket in 0..OUTPUT_BUCKETS {
         for input in [0, HIDDEN_SIZE, OUTPUT_INPUT_SIZE - 1] {
             assert_eq!(NETWORK.output_weights(bucket)[input], read_i16(NETWORK_BYTES, OUTPUT_WEIGHTS_OFFSET + 2 * (bucket * OUTPUT_INPUT_SIZE + input)));
         }
@@ -93,7 +95,15 @@ fn refreshes_when_a_king_crosses_the_de_boundary_or_changes_bucket() {
 }
 
 #[test]
-fn capture_crosses_output_bucket_boundary() {
+fn material_count_uses_the_only_output_bucket() {
+    let startpos = Board::default();
+    let start_state = NnueState::from_board(&startpos);
+    assert_eq!(start_state.output_bucket, 0);
+    assert_eq!(
+        start_state.evaluate(White),
+        NETWORK.save_evaluate(&start_state.accumulators[0], &start_state.accumulators[1], 0)
+    );
+
     let mut board = Board::from_fen("7k/8/8/3p4/4P3/8/4PN2/K7 w - - 0 1", false).unwrap();
     let before = NnueState::from_board(&board);
     let mv = parse_uci_move(&board, "e4d5").unwrap();
@@ -102,7 +112,7 @@ fn capture_crosses_output_bucket_boundary() {
     let mut incremental = before;
     incremental.play_move(&board, White, &engine_move);
     assert_eq!(incremental, NnueState::from_board(&board));
-    assert_eq!(before.output_bucket, 1);
+    assert_eq!(before.output_bucket, 0);
     assert_eq!(incremental.output_bucket, 0);
 }
 
