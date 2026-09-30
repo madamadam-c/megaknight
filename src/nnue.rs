@@ -15,8 +15,8 @@ const QA: i32 = 255;
 const QB: i32 = 64;
 const EVAL_SCALE: i32 = 400;
 const NETWORK_ALIGNMENT: usize = 64;
-const INPUT_BUCKETS: usize = 10;
-const OUTPUT_BUCKETS: usize = 1;
+const INPUT_BUCKETS: usize = 1;
+const OUTPUT_BUCKETS: usize = 16;
 const HIDDEN_SIZE: usize = 512;
 const OUTPUT_INPUT_SIZE: usize = 2 * HIDDEN_SIZE;
 const FEATURE_BIAS_OFFSET: usize = INPUT_SIZE * INPUT_BUCKETS * HIDDEN_SIZE * 2;
@@ -24,14 +24,14 @@ const OUTPUT_WEIGHTS_OFFSET: usize = FEATURE_BIAS_OFFSET + HIDDEN_SIZE * 2;
 const OUTPUT_BIAS_OFFSET: usize = OUTPUT_WEIGHTS_OFFSET + OUTPUT_BUCKETS * OUTPUT_INPUT_SIZE * 2;
 const NETWORK_PAYLOAD_SIZE: usize = OUTPUT_BIAS_OFFSET + OUTPUT_BUCKETS * 2;
 
-const NETWORK_BYTES: &[u8] = include_bytes!("../networks/test_buckets/1O10I.bin");
+const NETWORK_BYTES: &[u8] = include_bytes!("../networks/test_buckets/16O1I.bin");
 const NETWORK_FILE_SIZE: usize = NETWORK_BYTES.len();
 const NETWORK: Network = Network;
 
 #[repr(align(64))]
 struct AlignedBytes<const N: usize>([u8; N]);
 
-static NETWORK_DATA: AlignedBytes<NETWORK_FILE_SIZE> = AlignedBytes(*include_bytes!("../networks/test_buckets/1O10I.bin"));
+static NETWORK_DATA: AlignedBytes<NETWORK_FILE_SIZE> = AlignedBytes(*include_bytes!("../networks/test_buckets/16O1I.bin"));
 
 #[cfg(not(target_endian = "little"))]
 compile_error!("embedded NNUE weights require little-endian i16 storage");
@@ -511,16 +511,16 @@ impl NnueState {
     }
 }
 
-#[rustfmt::skip]
-const KING_BUCKET_LAYOUT: [u8; 32] = [
-    0, 1, 2, 3, 4, 4, 5, 5, 6, 6, 6, 6, 7, 7, 7, 7,
-    8, 8, 8, 8, 8, 8, 8, 8, 9, 9, 9, 9, 9, 9, 9, 9,
-];
 // #[rustfmt::skip]
 // const KING_BUCKET_LAYOUT: [u8; 32] = [
-//     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-//     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+//     0, 1, 2, 3, 4, 4, 5, 5, 6, 6, 6, 6, 7, 7, 7, 7,
+//     8, 8, 8, 8, 8, 8, 8, 8, 9, 9, 9, 9, 9, 9, 9, 9,
 // ];
+#[rustfmt::skip]
+const KING_BUCKET_LAYOUT: [u8; 32] = [
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+];
 // #[rustfmt::skip]
 // const KING_BUCKET_LAYOUT: [u8; 32] = [
 //     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
