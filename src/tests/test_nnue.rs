@@ -33,8 +33,8 @@ fn state_stores_two_accumulators_and_their_orientation() {
 fn network_file_matches_bucketed_layout() {
     assert_eq!(HIDDEN_SIZE, 512);
     assert_eq!(INPUT_BUCKETS, 1);
-    assert_eq!(OUTPUT_BUCKETS, 1);
-    assert_eq!(NETWORK_FILE_SIZE, 789_568);
+    assert_eq!(OUTPUT_BUCKETS, 16);
+    assert_eq!(NETWORK_FILE_SIZE, 820_288);
     assert_eq!((NETWORK_PAYLOAD_SIZE + 63) / 64 * 64, NETWORK_FILE_SIZE);
     for bucket in 0..OUTPUT_BUCKETS {
         for input in [0, HIDDEN_SIZE, OUTPUT_INPUT_SIZE - 1] {
@@ -95,13 +95,13 @@ fn refreshes_when_a_king_crosses_the_de_boundary_or_changes_bucket() {
 }
 
 #[test]
-fn material_count_uses_the_only_output_bucket() {
+fn capture_crosses_output_bucket_boundary() {
     let startpos = Board::default();
     let start_state = NnueState::from_board(&startpos);
-    assert_eq!(start_state.output_bucket, 0);
+    assert_eq!(start_state.output_bucket, 15);
     assert_eq!(
         start_state.evaluate(White),
-        NETWORK.save_evaluate(&start_state.accumulators[0], &start_state.accumulators[1], 0)
+        NETWORK.save_evaluate(&start_state.accumulators[0], &start_state.accumulators[1], 15)
     );
 
     let mut board = Board::from_fen("7k/8/8/3p4/4P3/8/4PN2/K7 w - - 0 1", false).unwrap();
@@ -112,8 +112,24 @@ fn material_count_uses_the_only_output_bucket() {
     let mut incremental = before;
     incremental.play_move(&board, White, &engine_move);
     assert_eq!(incremental, NnueState::from_board(&board));
-    assert_eq!(before.output_bucket, 0);
+    assert_eq!(before.output_bucket, 1);
     assert_eq!(incremental.output_bucket, 0);
+}
+
+#[test]
+fn sixteen_output_bucket_layout_matches_piece_count_boundaries() {
+    assert_eq!(OUTPUT_BUCKET_LAYOUT_16.len(), 33);
+    for (bucket, last) in [5, 7, 9, 11, 13, 15, 17, 19, 21, 22, 23, 24, 25, 26, 28, 32]
+        .into_iter()
+        .enumerate()
+    {
+        assert_eq!(OUTPUT_BUCKET_LAYOUT_16[last], bucket as u8);
+        if last < 32 {
+            assert_eq!(OUTPUT_BUCKET_LAYOUT_16[last + 1], (bucket + 1) as u8);
+        }
+    }
+    assert_eq!(OUTPUT_BUCKET_LAYOUT_16[2], 0);
+    assert_eq!(OUTPUT_BUCKET_LAYOUT[Board::default().occupied().len() as usize], 15);
 }
 
 #[test]
