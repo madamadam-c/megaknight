@@ -536,8 +536,10 @@ const KING_BUCKET_LAYOUT: [u8; 32] = [
 // Index is the total number of pieces on the board, including both kings.
 #[rustfmt::skip]
 const OUTPUT_BUCKET_LAYOUT_16: [u8; 33] = [
-    0, 0, 0, 0, 0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6,
-    6, 7, 7, 8, 8, 9, 10, 11, 12, 13, 14, 14, 15, 15, 15, 15,
+    // 0, 0, 0, 0, 0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6,
+    // 6, 7, 7, 8, 8, 9, 10, 11, 12, 13, 14, 14, 15, 15, 15, 15,
+    0, 0, 0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7,
+    7, 8, 8, 9, 9, 10, 10, 11, 11, 12, 12, 13, 13, 14, 14, 15
 ];
 const OUTPUT_BUCKET_LAYOUT: [u8; 33] = match OUTPUT_BUCKETS {
     1 => [0; 33],
